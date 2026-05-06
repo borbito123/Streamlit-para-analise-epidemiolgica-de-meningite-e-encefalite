@@ -16,7 +16,7 @@ Utilizando XLXsforms, criei um espelho da ficha de investigação de meningite e
 
 Link: https://ee.kobotoolbox.org/x/ifAQUhNw.
   
-# *Em construção e verificação* - Painel Streamlit para Parquets do SINAN, SIM e CIHA
+# Em construção - Painel Streamlit para Parquets do SINAN, SIM e CIHA
 
 Este app em Python foi feito para análise epidemiológica a partir de arquivos `.parquet` do DATASUS, com foco nos três bancos de dados supracitados.
 
