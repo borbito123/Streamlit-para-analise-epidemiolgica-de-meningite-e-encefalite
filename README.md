@@ -20,6 +20,8 @@ Link: https://ee.kobotoolbox.org/x/ifAQUhNw.
 
 Este app em Python foi feito para análise epidemiológica a partir de arquivos `.parquet` do DATASUS, com foco nos três bancos de dados supracitados.
 
+Link: https://fgwybuegynhnli87zeyurr.streamlit.app/
+
 Observação: Caso seja necesssário a escolha de um código de município, o código para o Rio de Janeiro é "330455 ou 3304557". O código do estado do Rio de Janeiro é "33".
 
 ## O que o app faz
