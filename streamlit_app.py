@@ -44,7 +44,7 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_VERSION = "2026-05-12-v3"
+APP_VERSION = "2026-05-13-v5-cid-sinan"
 
 
 CID_RULES = [
@@ -124,6 +124,106 @@ SINAN_CON_GROUP = {
     "10": "Pneumocócica",
 }
 
+# Conversão operacional CON_DIAGES (SINAN) -> CID-10 para comparação com SIM/CIHA.
+# A categoria 01 (meningococcemia isolada) é propositalmente não convertida,
+# pois não representa meningite quando aparece sem a forma meningítica.
+SINAN_CID10_FROM_CON_DIAGES = {
+    "02": {
+        "grupo": "A39.0",
+        "rotulo": "A39.0 — meningite meningocócica",
+        "origem": "02 — meningite meningocócica",
+    },
+    "03": {
+        "grupo": "A39.0",
+        "rotulo": "A39.0 — meningite meningocócica",
+        "origem": "03 — meningite meningocócica com meningococcemia",
+    },
+    "04": {
+        "grupo": "A17.0",
+        "rotulo": "A17.0 — meningite tuberculosa",
+        "origem": "04 — meningite tuberculosa",
+    },
+    "05": {
+        "grupo": "G00",
+        "rotulo": "G00 — meningite bacteriana não classificada em outra parte",
+        "origem": "05 — meningite por outras bactérias",
+    },
+    "06": {
+        "grupo": "G03",
+        "rotulo": "G03 — meningite por outras causas / não especificada",
+        "origem": "06 — meningite não especificada",
+    },
+    "07": {
+        "grupo": "A87",
+        "rotulo": "A87 — meningite viral",
+        "origem": "07 — meningite asséptica (operacionalmente viral no SINAN)",
+    },
+    "08": {
+        "grupo": "G02",
+        "rotulo": "G02 — meningite em outras doenças infecciosas/parasitárias",
+        "origem": "08 — meningite por outra etiologia",
+    },
+    "09": {
+        "grupo": "G00",
+        "rotulo": "G00 — meningite bacteriana não classificada em outra parte",
+        "origem": "09 — meningite por Haemophilus influenzae",
+    },
+    "10": {
+        "grupo": "G00",
+        "rotulo": "G00 — meningite bacteriana não classificada em outra parte",
+        "origem": "10 — meningite pneumocócica",
+    },
+}
+
+SINAN_CID10_NOT_CONVERTED = {
+    "01": "Não convertido — meningococcemia isolada",
+}
+
+SINAN_CID10_MAPPING_ROWS = [
+    {
+        "CON_DIAGES": "04",
+        "Grupo SINAN": "Meningite tuberculosa",
+        "CID-10 convertido": "A17.0",
+        "Observação": "Mantida como A17.0/A170 para comparação com CID bruto.",
+    },
+    {
+        "CON_DIAGES": "02, 03",
+        "Grupo SINAN": "Meningite meningocócica; meningite meningocócica com meningococcemia",
+        "CID-10 convertido": "A39.0",
+        "Observação": "Meningococcemia isolada (01) não entra nesta conversão.",
+    },
+    {
+        "CON_DIAGES": "07",
+        "Grupo SINAN": "Meningite asséptica",
+        "CID-10 convertido": "A87",
+        "Observação": "No SINAN, a categoria asséptica é tratada operacionalmente como viral; usar G03 somente para asséptica sem evidência/definição viral em CID bruto externo.",
+    },
+    {
+        "CON_DIAGES": "05, 09, 10",
+        "Grupo SINAN": "Outras bacterianas; Haemophilus influenzae; pneumocócica",
+        "CID-10 convertido": "G00",
+        "Observação": "Agrega G00.0, G00.1 e G00.8/G00.9 para comparação por família CID.",
+    },
+    {
+        "CON_DIAGES": "08",
+        "Grupo SINAN": "Meningite por outra etiologia",
+        "CID-10 convertido": "G02",
+        "Observação": "Correção lógica: no dicionário SINAN, esta categoria cobre principalmente fungos/protozoários/parasitas; portanto é mais compatível com G02 do que com G03.",
+    },
+    {
+        "CON_DIAGES": "06",
+        "Grupo SINAN": "Meningite não especificada",
+        "CID-10 convertido": "G03",
+        "Observação": "Usada para causa não especificada/outras causas não melhor classificadas.",
+    },
+    {
+        "CON_DIAGES": "01",
+        "Grupo SINAN": "Meningococcemia",
+        "CID-10 convertido": "Não convertido",
+        "Observação": "Excluído para evitar incluir pacientes sem meningite na comparação.",
+    },
+]
+
 SINAN_CLASSI_FIN = {
     "1": "1 — confirmado",
     "2": "2 — descartado",
@@ -154,6 +254,21 @@ YES_NO_IGN = {
     "1": "Sim",
     "2": "Não",
     "9": "Ignorado",
+}
+
+# Campos do exame quimiocitológico do líquor no SINAN.
+# Os nomes abaixo seguem o dicionário SINAN NET para meningite; os seletores do app
+# também aceitam variações próximas caso o banco venha renomeado.
+SINAN_QUIMIO_PARAMS = {
+    "hema": {"label": "Hemácias", "default_col": "LAB_HEMA"},
+    "neutro": {"label": "Neutrófilos", "default_col": "LAB_NEUTRO"},
+    "glico": {"label": "Glicose", "default_col": "LAB_GLICO"},
+    "leuco": {"label": "Leucócitos", "default_col": "LAB_LEUCO"},
+    "eosi": {"label": "Eosinófilos", "default_col": "LAB_EOSI"},
+    "prot": {"label": "Proteínas", "default_col": "LAB_PROT"},
+    "mono": {"label": "Monócitos", "default_col": "LAB_MONO"},
+    "linfo": {"label": "Linfócitos", "default_col": "LAB_LINFO"},
+    "clor": {"label": "Cloreto", "default_col": "LAB_CLOR"},
 }
 
 RACA_COR = {
@@ -5862,8 +5977,10 @@ FIELD_GUIDE = {
         ("CLASSI_FIN", "definição de caso", "confirmado, descartado, inconclusivo"),
         ("CON_DIAGES", "etiologia/forma", "conclusão diagnóstica específica"),
         ("EVOLUCAO", "desfecho", "alta, óbito por meningite, óbito por outra causa"),
-        ("CRITERIO", "critério", "cultura, PCR, clínico, quimiocitológico etc."),
-        ("LAB_PUNCAO", "investigação", "punção lombar realizada"),
+        ("CRITERIO", "critério de confirmação", "cultura, PCR, clínico, quimiocitológico etc."),
+        ("LAB_PUNCAO", "investigação", "punção laboratorial/lombar realizada"),
+        ("LAB_LIQUOR", "exame", "quimiocitológico do líquor realizado"),
+        ("LAB_GLICO / LAB_PROT / LAB_LEUCO", "parâmetros do LCR", "glicose, proteínas e leucócitos do exame quimiocitológico"),
         ("ID_AGRAVO", "CID bruto", "geralmente G039 neste recorte"),
     ],
     "SIM": [
@@ -6047,6 +6164,37 @@ def cid_group_expr(cid_sql: str) -> str:
 def cid_type_expr(cid_sql: str) -> str:
     clauses = [f"WHEN {cid_sql} LIKE {qstr(rule['prefixo'] + '%')} THEN {qstr(rule['rotulo'])}" for rule in CID_RULES]
     return f"CASE WHEN {cid_sql} IS NULL THEN 'Sem CID de meningite detectado' {' '.join(clauses)} ELSE 'Outro CID capturado' END"
+
+
+def _case_from_con_diages_attr(con_code_sql: str, attr: str, default: str) -> str:
+    parts = [
+        f"WHEN {qstr(code)} THEN {qstr(info[attr])}"
+        for code, info in SINAN_CID10_FROM_CON_DIAGES.items()
+    ]
+    for code, label in SINAN_CID10_NOT_CONVERTED.items():
+        parts.append(f"WHEN {qstr(code)} THEN {qstr(label)}")
+    return f"CASE {con_code_sql} {' '.join(parts)} ELSE {qstr(default)} END"
+
+
+def sinan_cid10_conversion_group_expr(con_code_sql: str) -> str:
+    return _case_from_con_diages_attr(
+        con_code_sql,
+        "grupo",
+        "Sem conversão — CON_DIAGES ausente ou não mapeado",
+    )
+
+
+def sinan_cid10_conversion_type_expr(con_code_sql: str) -> str:
+    return _case_from_con_diages_attr(
+        con_code_sql,
+        "rotulo",
+        "Sem conversão — CON_DIAGES ausente ou não mapeado",
+    )
+
+
+def sinan_cid10_conversion_include_expr(con_code_sql: str) -> str:
+    mapped = ", ".join(qstr(code) for code in SINAN_CID10_FROM_CON_DIAGES)
+    return f"CASE WHEN {con_code_sql} IN ({mapped}) THEN 'Sim' ELSE 'Não' END"
 
 
 def age_band_expr(age_sql: str, width: int = 5) -> str:
@@ -6240,6 +6388,16 @@ class ColumnSelection:
     evolucao_col: Optional[str] = None
     criterio_col: Optional[str] = None
     lab_puncao_col: Optional[str] = None
+    lab_liquor_col: Optional[str] = None
+    lab_hema_col: Optional[str] = None
+    lab_neutro_col: Optional[str] = None
+    lab_glico_col: Optional[str] = None
+    lab_leuco_col: Optional[str] = None
+    lab_eosi_col: Optional[str] = None
+    lab_prot_col: Optional[str] = None
+    lab_mono_col: Optional[str] = None
+    lab_linfo_col: Optional[str] = None
+    lab_clor_col: Optional[str] = None
     ate_hospit_col: Optional[str] = None
     dt_encerramento_col: Optional[str] = None
     dt_notificacao_col: Optional[str] = None
@@ -6288,7 +6446,17 @@ def default_selections(source: str, columns: Sequence[str]) -> ColumnSelection:
         sel.con_diages_col = choose_candidate(columns, ["CON_DIAGES"])
         sel.evolucao_col = choose_candidate(columns, ["EVOLUCAO"])
         sel.criterio_col = choose_candidate(columns, ["CRITERIO"])
-        sel.lab_puncao_col = choose_candidate(columns, ["LAB_PUNCAO"])
+        sel.lab_puncao_col = choose_candidate(columns, ["LAB_PUNCAO", "PUNCAO", "PUNCAO_LCR", "PUNCAO_LOMBAR"])
+        sel.lab_liquor_col = choose_candidate(columns, ["LAB_LIQUOR", "LIQUOR", "QUIMIOCITOLOGICO", "EXAME_QUIMIOCITOLOGICO", "EXAME_LIQUOR"])
+        sel.lab_hema_col = choose_candidate(columns, ["LAB_HEMA", "HEMACIAS", "NU_HEMACIAS"])
+        sel.lab_neutro_col = choose_candidate(columns, ["LAB_NEUTRO", "NEUTROFILOS", "NU_NEUTROFILO", "NU_NEUTROFILOS"])
+        sel.lab_glico_col = choose_candidate(columns, ["LAB_GLICO", "GLICOSE", "NU_GLICOSE"])
+        sel.lab_leuco_col = choose_candidate(columns, ["LAB_LEUCO", "LEUCOCITOS", "NU_LEUCOCITO", "NU_LEUCOCITOS"])
+        sel.lab_eosi_col = choose_candidate(columns, ["LAB_EOSI", "EOSINOFILOS", "NU_EOSINOFILO", "NU_EOSINOFILOS"])
+        sel.lab_prot_col = choose_candidate(columns, ["LAB_PROT", "PROTEINAS", "PROTEINA", "NU_PROTEINA", "NU_PROTEINAS"])
+        sel.lab_mono_col = choose_candidate(columns, ["LAB_MONO", "MONOCITOS", "NU_MONOCITO", "NU_MONOCITOS"])
+        sel.lab_linfo_col = choose_candidate(columns, ["LAB_LINFO", "LINFOCITOS", "NU_LINFOCITO", "NU_LINFOCITOS"])
+        sel.lab_clor_col = choose_candidate(columns, ["LAB_CLOR", "CLORETO", "CLORETOS", "NU_CLORETO", "NU_CLORETOS"])
         sel.ate_hospit_col = choose_candidate(columns, ["ATE_HOSPIT"])
         sel.dt_encerramento_col = choose_candidate(columns, ["DT_ENCERRA"])
         sel.dt_notificacao_col = choose_candidate(columns, ["DT_NOTIFIC"])
@@ -6348,9 +6516,27 @@ def build_expressions(source: str, sel: ColumnSelection) -> Dict[str, Optional[s
         exprs["con_code"] = clean_code_expr(sel.con_diages_col, pad2=True) if sel.con_diages_col else None
         exprs["con_label"] = case_from_mapping(exprs["con_code"], SINAN_CON_DIAGES, "Sem conclusão diagnóstica/ignorado") if exprs["con_code"] else None
         exprs["con_group"] = case_from_mapping(exprs["con_code"], SINAN_CON_GROUP, "Sem conclusão diagnóstica/ignorado") if exprs["con_code"] else None
+        if exprs["con_code"]:
+            exprs["sinan_cid10_conversion_group"] = sinan_cid10_conversion_group_expr(exprs["con_code"])
+            exprs["sinan_cid10_conversion_type"] = sinan_cid10_conversion_type_expr(exprs["con_code"])
+            exprs["sinan_cid10_conversion_include"] = sinan_cid10_conversion_include_expr(exprs["con_code"])
+        else:
+            exprs["sinan_cid10_conversion_group"] = None
+            exprs["sinan_cid10_conversion_type"] = None
+            exprs["sinan_cid10_conversion_include"] = None
         exprs["criterio_code"] = clean_code_expr(sel.criterio_col) if sel.criterio_col else None
         exprs["criterio_label"] = case_from_mapping(exprs["criterio_code"], SINAN_CRITERIO, "Sem critério/ignorado") if exprs["criterio_code"] else None
         exprs["puncao_label"] = case_from_mapping(clean_code_expr(sel.lab_puncao_col), YES_NO_IGN, "Sem informação") if sel.lab_puncao_col else None
+        exprs["quimio_label"] = case_from_mapping(clean_code_expr(sel.lab_liquor_col), YES_NO_IGN, "Sem informação") if sel.lab_liquor_col else None
+        exprs["lab_hema"] = numeric_expr(sel.lab_hema_col) if sel.lab_hema_col else None
+        exprs["lab_neutro"] = numeric_expr(sel.lab_neutro_col) if sel.lab_neutro_col else None
+        exprs["lab_glico"] = numeric_expr(sel.lab_glico_col) if sel.lab_glico_col else None
+        exprs["lab_leuco"] = numeric_expr(sel.lab_leuco_col) if sel.lab_leuco_col else None
+        exprs["lab_eosi"] = numeric_expr(sel.lab_eosi_col) if sel.lab_eosi_col else None
+        exprs["lab_prot"] = numeric_expr(sel.lab_prot_col) if sel.lab_prot_col else None
+        exprs["lab_mono"] = numeric_expr(sel.lab_mono_col) if sel.lab_mono_col else None
+        exprs["lab_linfo"] = numeric_expr(sel.lab_linfo_col) if sel.lab_linfo_col else None
+        exprs["lab_clor"] = numeric_expr(sel.lab_clor_col) if sel.lab_clor_col else None
         exprs["hospital_label"] = case_from_mapping(clean_code_expr(sel.ate_hospit_col), YES_NO_IGN, "Sem informação") if sel.ate_hospit_col else None
         exprs["dt_encerramento"] = date_expr(sel.dt_encerramento_col) if sel.dt_encerramento_col else None
         exprs["dt_notificacao"] = date_expr(sel.dt_notificacao_col) if sel.dt_notificacao_col else None
@@ -6544,6 +6730,195 @@ def query_cid_distribution(table: LoadedTable, exprs: Dict[str, Optional[str]], 
     df = run_query(table, sql)
     if not df.empty:
         df["pct"] = (df["n"] / df["n"].sum() * 100).round(2)
+    return df
+
+
+def query_sinan_cid10_conversion(table: LoadedTable, exprs: Dict[str, Optional[str]], where_sql: str) -> pd.DataFrame:
+    con_code = exprs.get("con_code")
+    if not con_code:
+        return pd.DataFrame()
+    con_label = exprs.get("con_label") or "NULL"
+    con_group = exprs.get("con_group") or "NULL"
+    cid_group = exprs.get("sinan_cid10_conversion_group") or sinan_cid10_conversion_group_expr(con_code)
+    cid_type = exprs.get("sinan_cid10_conversion_type") or sinan_cid10_conversion_type_expr(con_code)
+    include = exprs.get("sinan_cid10_conversion_include") or sinan_cid10_conversion_include_expr(con_code)
+    sql = f"""
+        WITH base AS (
+            SELECT {con_code} AS con_code,
+                   {con_label} AS conclusao_diagnostica,
+                   {con_group} AS grupo_etiologico_sinan,
+                   {cid_group} AS cid10_grupo,
+                   {cid_type} AS cid10_classificacao,
+                   {include} AS incluido_comparacao
+            FROM {table.ref_sql}
+            {where_sql}
+        ), agg AS (
+            SELECT cid10_grupo,
+                   cid10_classificacao,
+                   incluido_comparacao,
+                   COUNT(*) AS n,
+                   COUNT(DISTINCT con_code) FILTER (WHERE con_code IS NOT NULL) AS con_diages_distintos,
+                   string_agg(DISTINCT conclusao_diagnostica, '; ' ORDER BY conclusao_diagnostica)
+                       FILTER (WHERE conclusao_diagnostica IS NOT NULL) AS conclusoes_sinan,
+                   string_agg(DISTINCT grupo_etiologico_sinan, '; ' ORDER BY grupo_etiologico_sinan)
+                       FILTER (WHERE grupo_etiologico_sinan IS NOT NULL) AS grupos_sinan
+            FROM base
+            GROUP BY 1, 2, 3
+        )
+        SELECT *,
+               SUM(n) OVER (PARTITION BY incluido_comparacao) AS denominador,
+               CASE WHEN SUM(n) OVER (PARTITION BY incluido_comparacao) > 0
+                    THEN ROUND(100.0 * n / SUM(n) OVER (PARTITION BY incluido_comparacao), 2)
+                    ELSE NULL END AS pct
+        FROM agg
+        ORDER BY CASE WHEN incluido_comparacao = 'Sim' THEN 0 ELSE 1 END,
+                 n DESC, cid10_grupo
+    """
+    return run_query(table, sql)
+
+
+def query_ciha_death_cid_distribution(table: LoadedTable, exprs: Dict[str, Optional[str]], where_sql: str) -> pd.DataFrame:
+    morte = exprs.get("morte_code")
+    cid = exprs.get("cid")
+    if not (morte and cid):
+        return pd.DataFrame()
+    death_where = append_clause(where_sql, f"{morte} = '1'")
+    return query_cid_distribution(table, exprs, death_where)
+
+
+def sinan_quimio_param_exprs(exprs: Dict[str, Optional[str]]) -> List[Tuple[str, str, str]]:
+    params: List[Tuple[str, str, str]] = []
+    for key, info in SINAN_QUIMIO_PARAMS.items():
+        expr = exprs.get(f"lab_{key}")
+        if expr:
+            params.append((key, str(info["label"]), expr))
+    return params
+
+
+def query_sinan_quimio_summary(table: LoadedTable, exprs: Dict[str, Optional[str]], where_sql: str) -> pd.DataFrame:
+    params = sinan_quimio_param_exprs(exprs)
+    if not params:
+        return pd.DataFrame()
+    unions = []
+    for key, label, value_expr in params:
+        unions.append(
+            f"""
+            SELECT {qstr(key)} AS parametro_id, {qstr(label)} AS parametro, {value_expr} AS valor
+            FROM {table.ref_sql}
+            {where_sql}
+            """
+        )
+    sql = f"""
+        WITH valores AS (
+            {' UNION ALL '.join(unions)}
+        )
+        SELECT parametro_id,
+               parametro,
+               COUNT(*) AS registros_avaliados,
+               COUNT(*) FILTER (WHERE valor IS NOT NULL AND valor >= 0) AS n_valido,
+               COUNT(*) FILTER (WHERE valor IS NULL OR valor < 0) AS n_sem_valor,
+               ROUND(100.0 * COUNT(*) FILTER (WHERE valor IS NOT NULL AND valor >= 0) / NULLIF(COUNT(*), 0), 2) AS pct_preenchido,
+               MIN(valor) FILTER (WHERE valor IS NOT NULL AND valor >= 0) AS minimo,
+               quantile_cont(valor, 0.25) FILTER (WHERE valor IS NOT NULL AND valor >= 0) AS q1,
+               median(valor) FILTER (WHERE valor IS NOT NULL AND valor >= 0) AS mediana,
+               AVG(valor) FILTER (WHERE valor IS NOT NULL AND valor >= 0) AS media,
+               quantile_cont(valor, 0.75) FILTER (WHERE valor IS NOT NULL AND valor >= 0) AS q3,
+               MAX(valor) FILTER (WHERE valor IS NOT NULL AND valor >= 0) AS maximo
+        FROM valores
+        GROUP BY 1, 2
+        ORDER BY CASE parametro_id
+            WHEN 'hema' THEN 1
+            WHEN 'neutro' THEN 2
+            WHEN 'glico' THEN 3
+            WHEN 'leuco' THEN 4
+            WHEN 'eosi' THEN 5
+            WHEN 'prot' THEN 6
+            WHEN 'mono' THEN 7
+            WHEN 'linfo' THEN 8
+            WHEN 'clor' THEN 9
+            ELSE 99 END
+    """
+    return run_query(table, sql)
+
+
+def query_sinan_numeric_distribution(table: LoadedTable, value_expr: str, where_sql: str, bins: int = 30) -> pd.DataFrame:
+    stats_sql = f"""
+        WITH base AS (
+            SELECT {value_expr} AS valor
+            FROM {table.ref_sql}
+            {where_sql}
+        )
+        SELECT COUNT(*) AS n, MIN(valor) AS minimo, MAX(valor) AS maximo
+        FROM base
+        WHERE valor IS NOT NULL AND valor >= 0
+    """
+    stats = run_query(table, stats_sql)
+    if stats.empty or int(stats.iloc[0]["n"] or 0) == 0:
+        return pd.DataFrame()
+
+    n = int(stats.iloc[0]["n"])
+    minimo = float(stats.iloc[0]["minimo"])
+    maximo = float(stats.iloc[0]["maximo"])
+    if minimo == maximo:
+        return pd.DataFrame(
+            {
+                "faixa_inicio": [minimo],
+                "faixa_fim": [maximo],
+                "faixa": [f"{minimo:g}"],
+                "n": [n],
+                "denominador": [n],
+                "pct": [100.0],
+            }
+        )
+
+    bin_count = max(1, min(int(bins), n))
+    width = (maximo - minimo) / bin_count
+    if width <= 0:
+        return pd.DataFrame()
+
+    sql = f"""
+        WITH base AS (
+            SELECT {value_expr} AS valor
+            FROM {table.ref_sql}
+            {where_sql}
+        ), validos AS (
+            SELECT valor
+            FROM base
+            WHERE valor IS NOT NULL AND valor >= 0
+        ), binned AS (
+            SELECT CASE
+                       WHEN valor = {maximo!r} THEN {bin_count - 1}
+                       ELSE CAST(FLOOR((valor - {minimo!r}) / {width!r}) AS INTEGER)
+                   END AS bin_idx
+            FROM validos
+        ), agg AS (
+            SELECT bin_idx, COUNT(*) AS n
+            FROM binned
+            GROUP BY 1
+        )
+        SELECT {minimo!r} + bin_idx * {width!r} AS faixa_inicio,
+               CASE WHEN bin_idx = {bin_count - 1} THEN {maximo!r}
+                    ELSE {minimo!r} + (bin_idx + 1) * {width!r} END AS faixa_fim,
+               n,
+               SUM(n) OVER () AS denominador,
+               ROUND(100.0 * n / SUM(n) OVER (), 2) AS pct
+        FROM agg
+        ORDER BY faixa_inicio
+    """
+    df = run_query(table, sql)
+    if df.empty:
+        return df
+
+    def fmt(value: object) -> str:
+        try:
+            num = float(value)
+        except Exception:
+            return str(value)
+        if abs(num) >= 100 or abs(num - round(num)) < 1e-9:
+            return f"{num:.0f}"
+        return f"{num:.1f}".replace(".", ",")
+
+    df["faixa"] = [f"{fmt(a)}–{fmt(b)}" for a, b in zip(df["faixa_inicio"], df["faixa_fim"])]
     return df
 
 
@@ -6835,8 +7210,16 @@ def query_enriched_preview(table: LoadedTable, sel: ColumnSelection, exprs: Dict
         ("sinan_classificacao_final", exprs.get("classi_label")),
         ("sinan_conclusao_diagnostica", exprs.get("con_label")),
         ("sinan_grupo_etiologico", exprs.get("con_group")),
+        ("sinan_cid10_convertido_grupo", exprs.get("sinan_cid10_conversion_group")),
+        ("sinan_cid10_convertido_tipo", exprs.get("sinan_cid10_conversion_type")),
+        ("sinan_cid10_inclui_comparacao", exprs.get("sinan_cid10_conversion_include")),
         ("sinan_evolucao", exprs.get("evol_label")),
         ("sinan_criterio", exprs.get("criterio_label")),
+        ("sinan_puncao_laboratorial", exprs.get("puncao_label")),
+        ("sinan_exame_quimiocitologico", exprs.get("quimio_label")),
+        ("sinan_lab_glicose", exprs.get("lab_glico")),
+        ("sinan_lab_proteinas", exprs.get("lab_prot")),
+        ("sinan_lab_leucocitos", exprs.get("lab_leuco")),
         ("sim_obito_gravidez", exprs.get("obitograv_label")),
         ("sim_obito_puerperio", exprs.get("obitopuerp_label")),
         ("ciha_morte", exprs.get("morte_code")),
@@ -6860,6 +7243,17 @@ def query_enriched_preview(table: LoadedTable, sel: ColumnSelection, exprs: Dict
         sel.con_diages_col,
         sel.evolucao_col,
         sel.criterio_col,
+        sel.lab_puncao_col,
+        sel.lab_liquor_col,
+        sel.lab_hema_col,
+        sel.lab_neutro_col,
+        sel.lab_glico_col,
+        sel.lab_leuco_col,
+        sel.lab_eosi_col,
+        sel.lab_prot_col,
+        sel.lab_mono_col,
+        sel.lab_linfo_col,
+        sel.lab_clor_col,
         sel.causabas_col,
         sel.causabas_o_col,
         sel.obitograv_col,
@@ -7022,12 +7416,42 @@ def render_column_config(source: str, columns: Sequence[str]) -> ColumnSelection
                 evolucao_col = select("EVOLUCAO", defaults.evolucao_col, f"evol_{source}")
                 criterio_col = select("CRITERIO", defaults.criterio_col, f"criterio_{source}")
             with s3:
-                lab_puncao_col = select("LAB_PUNCAO", defaults.lab_puncao_col, f"puncao_{source}")
-                ate_hospit_col = select("ATE_HOSPIT", defaults.ate_hospit_col, f"hospit_{source}")
+                lab_puncao_col = select("LAB_PUNCAO — Punção Laboratorial", defaults.lab_puncao_col, f"puncao_{source}")
+                lab_liquor_col = select("LAB_LIQUOR — Exame Quimiocitológico", defaults.lab_liquor_col, f"quimio_{source}")
             with s4:
+                ate_hospit_col = select("ATE_HOSPIT", defaults.ate_hospit_col, f"hospit_{source}")
                 dt_encerramento_col = select("DT_ENCERRA", defaults.dt_encerramento_col, f"dt_enc_{source}")
                 dt_notificacao_col = select("DT_NOTIFIC", defaults.dt_notificacao_col, f"dt_notif_{source}")
-            return ColumnSelection(date_col, sex_col, age_col, age_unit_col, race_col, mun_res, mun_event, cid_cols, age_mode, classi_fin_col, con_diages_col, evolucao_col, criterio_col, lab_puncao_col, ate_hospit_col, dt_encerramento_col, dt_notificacao_col)
+
+            st.markdown("**Parâmetros do Exame Quimiocitológico do líquor**")
+            q1, q2, q3 = st.columns(3)
+            with q1:
+                lab_hema_col = select("LAB_HEMA — Hemácias", defaults.lab_hema_col, f"lab_hema_{source}")
+                lab_neutro_col = select("LAB_NEUTRO — Neutrófilos", defaults.lab_neutro_col, f"lab_neutro_{source}")
+                lab_glico_col = select("LAB_GLICO — Glicose", defaults.lab_glico_col, f"lab_glico_{source}")
+            with q2:
+                lab_leuco_col = select("LAB_LEUCO — Leucócitos", defaults.lab_leuco_col, f"lab_leuco_{source}")
+                lab_eosi_col = select("LAB_EOSI — Eosinófilos", defaults.lab_eosi_col, f"lab_eosi_{source}")
+                lab_prot_col = select("LAB_PROT — Proteínas", defaults.lab_prot_col, f"lab_prot_{source}")
+            with q3:
+                lab_mono_col = select("LAB_MONO — Monócitos", defaults.lab_mono_col, f"lab_mono_{source}")
+                lab_linfo_col = select("LAB_LINFO — Linfócitos", defaults.lab_linfo_col, f"lab_linfo_{source}")
+                lab_clor_col = select("LAB_CLOR — Cloreto", defaults.lab_clor_col, f"lab_clor_{source}")
+
+            return ColumnSelection(
+                date_col=date_col, sex_col=sex_col, age_col=age_col, age_unit_col=age_unit_col,
+                race_col=race_col, municipality_res_col=mun_res, municipality_event_col=mun_event,
+                cid_cols=cid_cols, age_mode=age_mode,
+                classi_fin_col=classi_fin_col, con_diages_col=con_diages_col,
+                evolucao_col=evolucao_col, criterio_col=criterio_col,
+                lab_puncao_col=lab_puncao_col, lab_liquor_col=lab_liquor_col,
+                lab_hema_col=lab_hema_col, lab_neutro_col=lab_neutro_col,
+                lab_glico_col=lab_glico_col, lab_leuco_col=lab_leuco_col,
+                lab_eosi_col=lab_eosi_col, lab_prot_col=lab_prot_col,
+                lab_mono_col=lab_mono_col, lab_linfo_col=lab_linfo_col, lab_clor_col=lab_clor_col,
+                ate_hospit_col=ate_hospit_col, dt_encerramento_col=dt_encerramento_col,
+                dt_notificacao_col=dt_notificacao_col,
+            )
 
         if source == "SIM":
             st.markdown("**Campos específicos do SIM**")
@@ -7245,6 +7669,8 @@ def render_temporal_tab(table: LoadedTable, source: str, graph_where: str, exprs
         cat_options["Tipo CID-10"] = exprs["cid_type"]
     if source == "SINAN" and exprs.get("con_group"):
         cat_options["Grupo etiológico SINAN"] = exprs["con_group"]
+    if source == "SINAN" and exprs.get("sinan_cid10_conversion_type"):
+        cat_options["CID-10 convertido SINAN"] = exprs["sinan_cid10_conversion_type"]
     if source == "SINAN" and exprs.get("classi_label"):
         cat_options["CLASSI_FIN"] = exprs["classi_label"]
     if exprs.get("sex"):
@@ -7514,37 +7940,229 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
 
 
 def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dict[str, Optional[str]]) -> None:
-    st.markdown("### CID-10 do registro")
-    render_cid_reference()
-    cid_dist = query_cid_distribution(table, exprs, graph_where)
-    if cid_dist.empty:
-        st.warning("Selecione ao menos um campo CID-10 válido para ativar esta análise.")
-    else:
-        fig = px.bar(cid_dist, x="n", y="tipo", orientation="h", text="pct", title="Distribuição por tipo CID-10")
-        fig.update_layout(yaxis={"categoryorder": "total ascending"})
-        st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(cid_dist, use_container_width=True, hide_index=True)
-        download_button(cid_dist, f"{source.lower()}_cid10_distribuicao.csv")
+    def br_int(value: object) -> str:
+        if pd.isna(value):
+            return "—"
+        return f"{int(value):,}".replace(",", ".")
 
-    if source == "SINAN":
-        st.markdown("### Classificação específica do SINAN")
-        st.info("No SINAN, use esta seção para interpretar a forma/etiologia. O CID bruto ID_AGRAVO pode estar como G039 para todos os registros.")
-        for label, expr in [
-            ("CLASSI_FIN", exprs.get("classi_label")),
-            ("CON_DIAGES — conclusão diagnóstica", exprs.get("con_label")),
-            ("Grupo etiológico SINAN", exprs.get("con_group")),
-            ("EVOLUCAO", exprs.get("evol_label")),
-            ("CRITERIO", exprs.get("criterio_label")),
-            ("LAB_PUNCAO", exprs.get("puncao_label")),
-        ]:
-            if expr:
-                df = query_category(table, expr, graph_where, top_n=40)
-                if not df.empty:
-                    st.markdown(f"**{label}**")
-                    fig = px.bar(df, x="n", y="categoria", orientation="h", text="pct", labels={"categoria": label, "n": "Registros"})
-                    fig.update_layout(yaxis={"categoryorder": "total ascending"})
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.dataframe(df, use_container_width=True, hide_index=True)
+    def br_pct(value: object) -> str:
+        if pd.isna(value):
+            return "—"
+        return f"{float(value):.1f}%".replace(".", ",")
+
+    def add_text(df: pd.DataFrame, pct_col: str = "pct") -> pd.DataFrame:
+        out = df.copy()
+        out["texto"] = [f"{br_int(n)} ({br_pct(pct)})" for n, pct in zip(out["n"], out[pct_col])]
+        return out
+
+    if source != "SINAN":
+        st.markdown("### CID-10 do registro")
+        render_cid_reference()
+        cid_dist = query_cid_distribution(table, exprs, graph_where)
+        if cid_dist.empty:
+            st.warning("Selecione ao menos um campo CID-10 válido para ativar esta análise.")
+        else:
+            cid_dist = add_text(cid_dist)
+            fig = px.bar(
+                cid_dist,
+                x="n",
+                y="tipo",
+                orientation="h",
+                text="texto",
+                title="Distribuição por tipo CID-10",
+                labels={"tipo": "Tipo CID-10", "n": "Registros", "pct": "%"},
+                hover_data={"texto": False, "pct": ":.2f", "cids_encontrados": True, "campos_origem": True},
+            )
+            fig.update_layout(yaxis={"categoryorder": "total ascending"})
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(cid_dist, use_container_width=True, hide_index=True)
+            download_button(cid_dist, f"{source.lower()}_cid10_distribuicao.csv")
+
+        if source == "CIHA":
+            st.markdown("### Óbitos CIHA — CID-10 destes")
+            morte = exprs.get("morte_code")
+            if not morte:
+                st.info("Para mostrar os óbitos da CIHA e seus CID-10, selecione o campo MORTE na configuração de colunas.")
+            elif not exprs.get("cid"):
+                st.info("Para mostrar o CID-10 dos óbitos da CIHA, selecione ao menos um campo de diagnóstico/CID-10.")
+            else:
+                death_where = append_clause(graph_where, f"{morte} = '1'")
+                total_deaths = count_rows(table, death_where)
+                st.metric("Óbitos CIHA no recorte atual", f"{total_deaths:,}".replace(",", "."))
+                if total_deaths == 0:
+                    st.info("Não há registros com MORTE = 1 no recorte atual.")
+                else:
+                    death_cid = query_ciha_death_cid_distribution(table, exprs, graph_where)
+                    if death_cid.empty:
+                        st.warning("Há óbitos no recorte, mas não foi possível tabular CID-10 para esses registros.")
+                    else:
+                        death_cid = add_text(death_cid)
+                        fig_death = px.bar(
+                            death_cid,
+                            x="n",
+                            y="tipo",
+                            orientation="h",
+                            text="texto",
+                            title="CIHA: CID-10 dos registros com morte administrativa",
+                            labels={"tipo": "Tipo CID-10", "n": "Óbitos CIHA", "pct": "% dos óbitos"},
+                            hover_data={"texto": False, "pct": ":.2f", "cids_encontrados": True, "campos_origem": True},
+                        )
+                        fig_death.update_layout(yaxis={"categoryorder": "total ascending"})
+                        st.plotly_chart(fig_death, use_container_width=True)
+                        st.dataframe(death_cid, use_container_width=True, hide_index=True)
+                        download_button(death_cid, "ciha_obitos_cid10_distribuicao.csv")
+        return
+
+    st.markdown("### Classificação específica do SINAN")
+    st.info(
+        "No SINAN, o CID bruto do agravo pode estar como G039 para quase todos os registros. "
+        "Por isso, nesta aba o gráfico bruto de distribuição por CID-10 foi substituído pela conversão de CON_DIAGES/grupo etiológico para famílias CID-10 comparáveis com SIM e CIHA."
+    )
+
+    # O gráfico CON_DIAGES detalhado foi removido porque o Grupo etiológico SINAN já é derivado do mesmo campo,
+    # com agrupamento mais adequado para leitura epidemiológica.
+    for label, expr in [
+        ("CLASSI_FIN", exprs.get("classi_label")),
+        ("Grupo etiológico SINAN", exprs.get("con_group")),
+    ]:
+        if expr:
+            df = query_category(table, expr, graph_where, top_n=40)
+            if not df.empty:
+                st.markdown(f"**{label}**")
+                fig = px.bar(df, x="n", y="categoria", orientation="h", text="pct", labels={"categoria": label, "n": "Registros"})
+                fig.update_layout(yaxis={"categoryorder": "total ascending"})
+                st.plotly_chart(fig, use_container_width=True)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        if label == "Grupo etiológico SINAN":
+            conv = query_sinan_cid10_conversion(table, exprs, graph_where)
+            if not conv.empty:
+                conv_yes = conv[conv["incluido_comparacao"].eq("Sim")].copy()
+                conv_no = conv[~conv["incluido_comparacao"].eq("Sim")].copy()
+
+                st.markdown("**CID-10 / classificação — conversão do grupo etiológico SINAN**")
+                if conv_yes.empty:
+                    st.warning("Não há registros com CON_DIAGES conversível pela regra definida.")
+                else:
+                    conv_yes = add_text(conv_yes)
+                    fig_conv = px.bar(
+                        conv_yes,
+                        x="n",
+                        y="cid10_classificacao",
+                        orientation="h",
+                        text="texto",
+                        title="SINAN: conversão dos grupos etiológicos para CID-10",
+                        labels={"cid10_classificacao": "CID-10 convertido", "n": "Registros", "pct": "%"},
+                        hover_data={"texto": False, "pct": ":.2f", "denominador": True, "grupos_sinan": True, "conclusoes_sinan": True},
+                    )
+                    fig_conv.update_layout(yaxis={"categoryorder": "total ascending"})
+                    st.plotly_chart(fig_conv, use_container_width=True)
+                    st.dataframe(
+                        conv_yes[["cid10_grupo", "cid10_classificacao", "n", "pct", "grupos_sinan", "conclusoes_sinan"]],
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                    download_button(conv_yes, "sinan_cid10_conversao_grupo_etiologico.csv")
+
+                with st.expander("Regra usada para converter CON_DIAGES em CID-10"):
+                    st.dataframe(pd.DataFrame(SINAN_CID10_MAPPING_ROWS), use_container_width=True, hide_index=True)
+                    st.caption(
+                        "Observação: CON_DIAGES 01 (meningococcemia isolada) fica fora da conversão; "
+                        "CON_DIAGES 02 e 03 entram como A39.0. A categoria 08 foi mapeada para G02 por coerência com o CID-10, "
+                        "pois no SINAN ela representa outras etiologias infecciosas/parasitárias."
+                    )
+
+                if not conv_no.empty:
+                    st.caption("Registros não convertidos para a comparação CID-10, mantendo transparência da exclusão/ausência de mapeamento:")
+                    st.dataframe(
+                        conv_no[["cid10_grupo", "cid10_classificacao", "n", "pct", "conclusoes_sinan"]],
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+    for label, expr in [
+        ("EVOLUCAO", exprs.get("evol_label")),
+        ("Critério de confirmação para classificação do caso", exprs.get("criterio_label")),
+        ("Punção Laboratorial", exprs.get("puncao_label")),
+        ("Exame Quimiocitológico", exprs.get("quimio_label")),
+    ]:
+        if expr:
+            df = query_category(table, expr, graph_where, top_n=40)
+            if not df.empty:
+                df = add_text(df)
+                st.markdown(f"**{label}**")
+                fig = px.bar(
+                    df,
+                    x="n",
+                    y="categoria",
+                    orientation="h",
+                    text="texto",
+                    labels={"categoria": label, "n": "Registros", "pct": "%"},
+                    hover_data={"texto": False, "pct": ":.2f"},
+                )
+                fig.update_layout(yaxis={"categoryorder": "total ascending"})
+                st.plotly_chart(fig, use_container_width=True)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+    quimio_summary = query_sinan_quimio_summary(table, exprs, graph_where)
+    if quimio_summary.empty:
+        st.info(
+            "Para gerar o resumo do Exame Quimiocitológico, selecione os campos laboratoriais do SINAN "
+            "na configuração de colunas, como LAB_GLICO, LAB_LEUCO e LAB_PROT."
+        )
+    else:
+        st.markdown("**Exame Quimiocitológico — valores dos parâmetros**")
+        resumo_plot = quimio_summary[quimio_summary["n_valido"] > 0].copy()
+        if not resumo_plot.empty:
+            resumo_plot["texto"] = [
+                f"mediana {float(med):.1f}".replace(".", ",") if pd.notna(med) else "—"
+                for med in resumo_plot["mediana"]
+            ]
+            fig_quimio = px.bar(
+                resumo_plot,
+                x="parametro",
+                y="mediana",
+                text="texto",
+                title="SINAN: mediana dos parâmetros do exame quimiocitológico",
+                labels={"parametro": "Parâmetro", "mediana": "Mediana", "n_valido": "Registros válidos"},
+                hover_data={
+                    "texto": False,
+                    "n_valido": True,
+                    "pct_preenchido": ":.2f",
+                    "minimo": ":.2f",
+                    "q1": ":.2f",
+                    "media": ":.2f",
+                    "q3": ":.2f",
+                    "maximo": ":.2f",
+                },
+            )
+            st.plotly_chart(fig_quimio, use_container_width=True)
+        st.dataframe(quimio_summary, use_container_width=True, hide_index=True)
+        download_button(quimio_summary, "sinan_quimiocitologico_resumo_parametros.csv")
+
+        for key, titulo in [("glico", "Glicose"), ("prot", "Proteínas"), ("leuco", "Leucócitos")]:
+            expr = exprs.get(f"lab_{key}")
+            if not expr:
+                st.info(f"Para gerar a distribuição de {titulo}, selecione o campo correspondente na configuração de colunas do SINAN.")
+                continue
+            dist = query_sinan_numeric_distribution(table, expr, graph_where)
+            if dist.empty:
+                st.info(f"Não há valores numéricos válidos para {titulo} no recorte atual.")
+                continue
+            dist = add_text(dist)
+            st.markdown(f"**Distribuição — {titulo}**")
+            fig_dist = px.bar(
+                dist,
+                x="faixa",
+                y="n",
+                text="texto",
+                title=f"SINAN: distribuição de {titulo}",
+                labels={"faixa": titulo, "n": "Registros", "pct": "%"},
+                hover_data={"texto": False, "pct": ":.2f", "denominador": True, "faixa_inicio": ":.2f", "faixa_fim": ":.2f"},
+            )
+            st.plotly_chart(fig_dist, use_container_width=True)
+            st.dataframe(dist, use_container_width=True, hide_index=True)
+            download_button(dist, f"sinan_quimiocitologico_distribuicao_{safe_filename(titulo)}.csv")
 
 
 def render_demography_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dict[str, Optional[str]]) -> None:
@@ -7666,7 +8284,11 @@ def render_quality_tab(table: LoadedTable, source: str, base_where: str, exprs: 
             "CON_DIAGES": exprs.get("con_code"),
             "EVOLUCAO": exprs.get("evol_code"),
             "CRITERIO": exprs.get("criterio_code"),
-            "LAB_PUNCAO": exprs.get("puncao_label"),
+            "Punção Laboratorial": exprs.get("puncao_label"),
+            "Exame Quimiocitológico": exprs.get("quimio_label"),
+            "Glicose": exprs.get("lab_glico"),
+            "Proteínas": exprs.get("lab_prot"),
+            "Leucócitos": exprs.get("lab_leuco"),
         })
     elif source == "CIHA":
         fields.update({"MORTE": exprs.get("morte_code"), "DIAS_PERM": exprs.get("dias_perm"), "MODALIDADE": exprs.get("modalidade_label")})
