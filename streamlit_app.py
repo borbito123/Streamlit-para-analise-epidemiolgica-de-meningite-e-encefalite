@@ -2,7 +2,7 @@
 """
 Painel epidemiológico para meningite — SINAN, SIM e CIHA
 
-O app aceita arquivos DuckDB ou Parquet, calcula indicadores descritivos e separa:
+O app aceita arquivos DuckDB, Parquet local/upload ou Parquets da release GitHub, calcula indicadores descritivos e separa:
 - CID-10 bruto do caso/óbito/atendimento;
 - classificação epidemiológica específica do SINAN, especialmente CON_DIAGES;
 - definições operacionais de série: notificações, confirmados, descartados, óbitos etc.
@@ -20,9 +20,13 @@ import glob
 import hashlib
 import html as html_lib
 import json
+import re
 import tempfile
 import textwrap
 import unicodedata
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -46,7 +50,36 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_VERSION = "2026-05-15-v13-sinan-cid10-convertido-grafico"
+APP_VERSION = "2026-05-15-v14-github-release1-parquets"
+
+
+# =============================================================================
+# Integração GitHub Release — Parquets empacotados com o painel
+# =============================================================================
+
+GITHUB_RELEASE_OWNER = "borbito123"
+GITHUB_RELEASE_REPO = "Teste---Dados-Epidemiol-gicos-para-meningite-SINAN-CIHA-SIM---Rio-de-Janeiro"
+GITHUB_RELEASE_TAG = "Release1"
+GITHUB_RELEASE_PAGE_URL = (
+    f"https://github.com/{GITHUB_RELEASE_OWNER}/{GITHUB_RELEASE_REPO}/releases/tag/{GITHUB_RELEASE_TAG}"
+)
+GITHUB_RELEASE_EXPANDED_ASSETS_URL = (
+    f"https://github.com/{GITHUB_RELEASE_OWNER}/{GITHUB_RELEASE_REPO}/releases/expanded_assets/{GITHUB_RELEASE_TAG}"
+)
+GITHUB_RELEASE_API_URL = (
+    "https://api.github.com/repos/"
+    f"{GITHUB_RELEASE_OWNER}/{urllib.parse.quote(GITHUB_RELEASE_REPO, safe='')}/releases/tags/{GITHUB_RELEASE_TAG}"
+)
+GITHUB_RELEASE_SOURCE_PREFIX = {
+    "SINAN": "SINAN_MENINGITE_RIO_ESTADO_",
+    "SIM": "SIM_DO_RIO_ESTADO_",
+    "CIHA": "CIHA_RIO_ESTADO_",
+}
+GITHUB_RELEASE_FALLBACK_PARQUETS = (
+    [f"CIHA_RIO_ESTADO_{year}.parquet" for year in range(2011, 2026)]
+    + [f"SIM_DO_RIO_ESTADO_{year}.parquet" for year in range(2007, 2025)]
+    + [f"SINAN_MENINGITE_RIO_ESTADO_{year}.parquet" for year in range(2007, 2026)]
+)
 
 
 CID_RULES = [
@@ -6684,6 +6717,180 @@ def safe_filename(text: str) -> str:
     return n or "saida"
 
 
+
+# =============================================================================
+# Integração com assets Parquet da release do GitHub
+# =============================================================================
+
+
+def github_release_download_url(asset_name: str) -> str:
+    encoded_name = urllib.parse.quote(asset_name, safe="")
+    return (
+        f"https://github.com/{GITHUB_RELEASE_OWNER}/{GITHUB_RELEASE_REPO}/"
+        f"releases/download/{GITHUB_RELEASE_TAG}/{encoded_name}"
+    )
+
+
+def _asset_source(asset_name: str) -> str:
+    upper = asset_name.upper()
+    for source, prefix in GITHUB_RELEASE_SOURCE_PREFIX.items():
+        if upper.startswith(prefix.upper()):
+            return source
+    return "OUTROS"
+
+
+def _asset_year(asset_name: str) -> Optional[int]:
+    match = re.search(r"(?:19|20)\d{2}", asset_name)
+    if not match:
+        return None
+    return int(match.group(0))
+
+
+def _format_bytes(size: object) -> str:
+    try:
+        value = float(size)
+    except (TypeError, ValueError):
+        return ""
+    units = ["B", "KB", "MB", "GB"]
+    idx = 0
+    while value >= 1024 and idx < len(units) - 1:
+        value /= 1024
+        idx += 1
+    if idx == 0:
+        return f"{int(value)} {units[idx]}"
+    return f"{value:.1f} {units[idx]}"
+
+
+def _github_request(url: str, accept: str = "application/vnd.github+json") -> str:
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": accept,
+            "User-Agent": "meningite-streamlit-dashboard",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=45) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def _normalise_github_asset(raw: Dict[str, object]) -> Dict[str, object]:
+    name = str(raw.get("name") or "").strip()
+    return {
+        "name": name,
+        "source": _asset_source(name),
+        "year": _asset_year(name),
+        "size": raw.get("size"),
+        "digest": raw.get("digest") or raw.get("sha256") or "",
+        "download_url": raw.get("browser_download_url") or github_release_download_url(name),
+        "updated_at": raw.get("updated_at") or raw.get("created_at") or "",
+    }
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def list_github_release_parquets() -> List[Dict[str, object]]:
+    """Lista os Parquets da release GitHub.
+
+    Usa a API pública do GitHub quando disponível, tenta a página HTML expandida
+    como segunda opção e, por fim, usa a lista esperada da Release1. A lista de
+    fallback evita que o painel quebre em ambiente com rate limit temporário da API.
+    """
+    assets: List[Dict[str, object]] = []
+
+    try:
+        payload = json.loads(_github_request(GITHUB_RELEASE_API_URL))
+        for item in payload.get("assets", []):
+            name = str(item.get("name") or "")
+            if name.lower().endswith(".parquet"):
+                assets.append(_normalise_github_asset(item))
+    except Exception:
+        assets = []
+
+    if not assets:
+        try:
+            html = _github_request(GITHUB_RELEASE_EXPANDED_ASSETS_URL, accept="text/html")
+            seen = set()
+            pattern = r'href="([^"]*/releases/download/[^"]+?\.parquet)"[^>]*>\s*([^<]+\.parquet)\s*</a>'
+            for href, raw_name in re.findall(pattern, html, flags=re.IGNORECASE):
+                name = html_lib.unescape(raw_name).strip()
+                if not name or name in seen:
+                    continue
+                seen.add(name)
+                url = href if href.startswith("http") else f"https://github.com{href}"
+                assets.append(_normalise_github_asset({"name": name, "browser_download_url": url}))
+        except Exception:
+            assets = []
+
+    if not assets:
+        assets = [_normalise_github_asset({"name": name}) for name in GITHUB_RELEASE_FALLBACK_PARQUETS]
+
+    source_order = {"SINAN": 0, "SIM": 1, "CIHA": 2, "OUTROS": 9}
+    return sorted(
+        assets,
+        key=lambda asset: (
+            source_order.get(str(asset.get("source")), 9),
+            asset.get("year") or 9999,
+            str(asset.get("name")),
+        ),
+    )
+
+
+def github_asset_label(asset: Dict[str, object]) -> str:
+    year = asset.get("year")
+    name = str(asset.get("name") or "")
+    size = _format_bytes(asset.get("size"))
+    prefix = f"{year} — " if year else ""
+    suffix = f" ({size})" if size else ""
+    return f"{prefix}{name}{suffix}"
+
+
+@st.cache_data(show_spinner=False, ttl=24 * 3600)
+def download_github_release_asset_bytes(asset_name: str, download_url: str, digest: str = "") -> bytes:
+    req = urllib.request.Request(
+        download_url,
+        headers={
+            "Accept": "application/octet-stream",
+            "User-Agent": "meningite-streamlit-dashboard",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        data = resp.read()
+
+    if digest and str(digest).startswith("sha256:"):
+        expected = str(digest).split(":", 1)[1].lower()
+        observed = hashlib.sha256(data).hexdigest().lower()
+        if observed != expected:
+            raise ValueError(
+                f"SHA-256 divergente para {asset_name}: esperado {expected}, obtido {observed}."
+            )
+    return data
+
+
+def materialize_github_release_asset(asset: Dict[str, object]) -> str:
+    name = str(asset.get("name") or "")
+    if not name:
+        raise ValueError("Asset GitHub sem nome.")
+    url = str(asset.get("download_url") or github_release_download_url(name))
+    digest = str(asset.get("digest") or "")
+    data = download_github_release_asset_bytes(name, url, digest)
+    digest_key = hashlib.sha1(f"{GITHUB_RELEASE_TAG}|{url}|{digest}".encode("utf-8")).hexdigest()[:16]
+    out_dir = Path(tempfile.gettempdir()) / "meningite_github_release"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{safe_filename(Path(name).stem)}_{digest_key}.parquet"
+    if not out.exists() or out.stat().st_size != len(data):
+        out.write_bytes(data)
+    return str(out)
+
+
+def github_selection_summary(assets: Sequence[Dict[str, object]]) -> str:
+    years = sorted({a.get("year") for a in assets if a.get("year")})
+    if not years:
+        return f"{len(assets)} parquet(s)"
+    if len(years) == 1:
+        return f"{len(assets)} parquet(s), ano {years[0]}"
+    return f"{len(assets)} parquet(s), {years[0]}–{years[-1]}"
+
+
 # =============================================================================
 # Tabelas carregadas e consultas
 # =============================================================================
@@ -8005,10 +8212,54 @@ def render_loader(source: str) -> Optional[LoadedTable]:
 
     mode = st.radio(
         "Fonte de dados",
-        ["DuckDB local", "Upload DuckDB", "Parquet local/glob", "Upload Parquet"],
+        ["GitHub Release1 (Parquets)", "DuckDB local", "Upload DuckDB", "Parquet local/glob", "Upload Parquet"],
         horizontal=True,
         key=f"load_mode_{source}",
     )
+
+    if mode == "GitHub Release1 (Parquets)":
+        st.caption(f"Fonte padrão: {GITHUB_RELEASE_PAGE_URL}")
+        try:
+            release_assets = list_github_release_parquets()
+        except Exception as exc:
+            st.error(f"Não consegui listar os assets da release do GitHub: {exc}")
+            return None
+
+        source_assets = [asset for asset in release_assets if asset.get("source") == source]
+        if not source_assets:
+            st.error(f"Não encontrei Parquets da base {source} na release {GITHUB_RELEASE_TAG}.")
+            return None
+
+        label_to_asset = {github_asset_label(asset): asset for asset in source_assets}
+        labels = list(label_to_asset.keys())
+        selected_labels = st.multiselect(
+            "Escolha os Parquets da release para carregar",
+            options=labels,
+            default=labels,
+            key=f"github_release_assets_{source}",
+            help="Você pode usar todos os anos disponíveis ou selecionar apenas anos/arquivos específicos para a análise.",
+        )
+        if not selected_labels:
+            st.info("Selecione ao menos um arquivo Parquet da release para continuar.")
+            return None
+
+        selected_assets = [label_to_asset[label] for label in selected_labels]
+        try:
+            with st.spinner(f"Baixando/carregando {len(selected_assets)} parquet(s) da release {GITHUB_RELEASE_TAG}..."):
+                paths = [materialize_github_release_asset(asset) for asset in selected_assets]
+        except Exception as exc:
+            st.error(f"Não consegui baixar os Parquets selecionados da release: {exc}")
+            st.info("Como alternativa, use Upload Parquet ou Parquet local/glob.")
+            return None
+
+        st.success(f"{github_selection_summary(selected_assets)} selecionado(s) da release {GITHUB_RELEASE_TAG}.")
+        return LoadedTable(
+            source=source,
+            kind="parquet",
+            parquet_paths=paths,
+            ref_sql=parquet_ref(paths),
+            label=f"GitHub {GITHUB_RELEASE_TAG}: {github_selection_summary(selected_assets)}",
+        )
 
     if mode == "DuckDB local":
         default_path = first_existing_path(cfg.default_db)
@@ -9431,7 +9682,7 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Orientação")
-        st.write("Carregue cada base em sua aba. Para os arquivos enviados, use o modo **DuckDB local** se eles estiverem na mesma pasta do app.")
+        st.write("Carregue cada base em sua aba. Por padrão, use **GitHub Release1 (Parquets)** para selecionar os arquivos da release; as opções locais/upload continuam disponíveis.")
         st.write("O painel é exploratório. Para conclusões finais, exporte as tabelas e valide as regras em SQL/Python.")
 
     tabs = st.tabs(["Metodologia", "SINAN", "SIM", "CIHA", "Comparação"])
