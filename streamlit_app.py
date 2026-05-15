@@ -50,7 +50,7 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_VERSION = "2026-05-15-v14-github-release1-parquets"
+APP_VERSION = "2026-05-15-v15-github-release1-selecao-manual"
 
 
 # =============================================================================
@@ -6844,8 +6844,16 @@ def github_asset_label(asset: Dict[str, object]) -> str:
     return f"{prefix}{name}{suffix}"
 
 
-@st.cache_data(show_spinner=False, ttl=24 * 3600)
-def download_github_release_asset_bytes(asset_name: str, download_url: str, digest: str = "") -> bytes:
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest().lower()
+
+
+def download_github_release_asset_to_path(asset_name: str, download_url: str, out_path: Path, digest: str = "") -> None:
+    """Baixa um asset para disco em streaming, sem manter o Parquet inteiro em memória."""
     req = urllib.request.Request(
         download_url,
         headers={
@@ -6853,17 +6861,58 @@ def download_github_release_asset_bytes(asset_name: str, download_url: str, dige
             "User-Agent": "meningite-streamlit-dashboard",
         },
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = resp.read()
-
+    expected_sha256 = ""
     if digest and str(digest).startswith("sha256:"):
+        expected_sha256 = str(digest).split(":", 1)[1].lower()
+
+    tmp_path = out_path.with_suffix(out_path.suffix + ".download")
+    h = hashlib.sha256() if expected_sha256 else None
+    total = 0
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp, tmp_path.open("wb") as f:
+            while True:
+                chunk = resp.read(1024 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+                total += len(chunk)
+                if h is not None:
+                    h.update(chunk)
+
+        if total == 0:
+            raise ValueError(f"Download vazio para {asset_name}.")
+
+        if expected_sha256:
+            observed = h.hexdigest().lower() if h is not None else ""
+            if observed != expected_sha256:
+                raise ValueError(
+                    f"SHA-256 divergente para {asset_name}: esperado {expected_sha256}, obtido {observed}."
+                )
+
+        tmp_path.replace(out_path)
+    except Exception:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise
+
+
+@st.cache_data(show_spinner=False, ttl=24 * 3600)
+def materialize_github_release_asset_cached(asset_name: str, download_url: str, digest: str = "") -> str:
+    digest_key = hashlib.sha1(f"{GITHUB_RELEASE_TAG}|{download_url}|{digest}".encode("utf-8")).hexdigest()[:16]
+    out_dir = Path(tempfile.gettempdir()) / "meningite_github_release"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{safe_filename(Path(asset_name).stem)}_{digest_key}.parquet"
+
+    should_download = not out.exists() or out.stat().st_size == 0
+    if not should_download and digest and str(digest).startswith("sha256:"):
         expected = str(digest).split(":", 1)[1].lower()
-        observed = hashlib.sha256(data).hexdigest().lower()
-        if observed != expected:
-            raise ValueError(
-                f"SHA-256 divergente para {asset_name}: esperado {expected}, obtido {observed}."
-            )
-    return data
+        should_download = _sha256_file(out) != expected
+
+    if should_download:
+        download_github_release_asset_to_path(asset_name, download_url, out, digest)
+    return str(out)
 
 
 def materialize_github_release_asset(asset: Dict[str, object]) -> str:
@@ -6872,14 +6921,7 @@ def materialize_github_release_asset(asset: Dict[str, object]) -> str:
         raise ValueError("Asset GitHub sem nome.")
     url = str(asset.get("download_url") or github_release_download_url(name))
     digest = str(asset.get("digest") or "")
-    data = download_github_release_asset_bytes(name, url, digest)
-    digest_key = hashlib.sha1(f"{GITHUB_RELEASE_TAG}|{url}|{digest}".encode("utf-8")).hexdigest()[:16]
-    out_dir = Path(tempfile.gettempdir()) / "meningite_github_release"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"{safe_filename(Path(name).stem)}_{digest_key}.parquet"
-    if not out.exists() or out.stat().st_size != len(data):
-        out.write_bytes(data)
-    return str(out)
+    return materialize_github_release_asset_cached(name, url, digest)
 
 
 def github_selection_summary(assets: Sequence[Dict[str, object]]) -> str:
@@ -8219,6 +8261,10 @@ def render_loader(source: str) -> Optional[LoadedTable]:
 
     if mode == "GitHub Release1 (Parquets)":
         st.caption(f"Fonte padrão: {GITHUB_RELEASE_PAGE_URL}")
+        st.info(
+            "Nenhum Parquet da release é carregado automaticamente. "
+            "Marque manualmente os arquivos desejados e clique em **Carregar/atualizar seleção**."
+        )
         try:
             release_assets = list_github_release_parquets()
         except Exception as exc:
@@ -8231,28 +8277,74 @@ def render_loader(source: str) -> Optional[LoadedTable]:
             return None
 
         label_to_asset = {github_asset_label(asset): asset for asset in source_assets}
+        name_to_asset = {str(asset.get("name") or ""): asset for asset in source_assets}
         labels = list(label_to_asset.keys())
         selected_labels = st.multiselect(
-            "Escolha os Parquets da release para carregar",
+            "Escolha manualmente os Parquets da release para carregar",
             options=labels,
-            default=labels,
+            default=[],
             key=f"github_release_assets_{source}",
-            help="Você pode usar todos os anos disponíveis ou selecionar apenas anos/arquivos específicos para a análise.",
+            help="Nada é pré-selecionado para evitar sobrecarga na abertura do app.",
         )
-        if not selected_labels:
-            st.info("Selecione ao menos um arquivo Parquet da release para continuar.")
+        selected_names = [str(label_to_asset[label].get("name") or "") for label in selected_labels]
+        loaded_key = f"github_release_loaded_asset_names_{source}"
+
+        c_load, c_clear = st.columns([2, 1])
+        with c_load:
+            load_clicked = st.button(
+                "Carregar/atualizar seleção",
+                key=f"github_release_load_selected_{source}",
+                type="primary",
+                disabled=not selected_names,
+                use_container_width=True,
+            )
+        with c_clear:
+            clear_clicked = st.button(
+                "Descarregar base",
+                key=f"github_release_clear_selected_{source}",
+                disabled=not st.session_state.get(loaded_key),
+                use_container_width=True,
+            )
+
+        if load_clicked:
+            st.session_state[loaded_key] = selected_names
+        if clear_clicked:
+            st.session_state.pop(loaded_key, None)
+
+        loaded_names = list(st.session_state.get(loaded_key, []))
+        if not loaded_names:
+            st.info("Selecione um ou mais Parquets e clique em **Carregar/atualizar seleção** para iniciar a análise.")
             return None
 
-        selected_assets = [label_to_asset[label] for label in selected_labels]
+        selected_assets = [name_to_asset[name] for name in loaded_names if name in name_to_asset]
+        missing_assets = [name for name in loaded_names if name not in name_to_asset]
+        if missing_assets:
+            st.warning(
+                "Alguns arquivos carregados anteriormente não aparecem mais na release e foram ignorados: "
+                + ", ".join(missing_assets)
+            )
+        if not selected_assets:
+            st.info("A seleção carregada não contém Parquets válidos. Escolha novamente os arquivos da release.")
+            return None
+
+        if set(selected_names) != set(loaded_names):
+            st.warning(
+                "A lista marcada na tela é diferente da seleção atualmente carregada. "
+                "Clique em **Carregar/atualizar seleção** para aplicar a nova escolha."
+            )
+
+        with st.expander("Parquets atualmente carregados", expanded=False):
+            st.write("\n".join(f"- {name}" for name in loaded_names))
+
         try:
-            with st.spinner(f"Baixando/carregando {len(selected_assets)} parquet(s) da release {GITHUB_RELEASE_TAG}..."):
+            with st.spinner(f"Preparando {len(selected_assets)} parquet(s) selecionado(s) da release {GITHUB_RELEASE_TAG}..."):
                 paths = [materialize_github_release_asset(asset) for asset in selected_assets]
         except Exception as exc:
             st.error(f"Não consegui baixar os Parquets selecionados da release: {exc}")
             st.info("Como alternativa, use Upload Parquet ou Parquet local/glob.")
             return None
 
-        st.success(f"{github_selection_summary(selected_assets)} selecionado(s) da release {GITHUB_RELEASE_TAG}.")
+        st.success(f"{github_selection_summary(selected_assets)} carregado(s) da release {GITHUB_RELEASE_TAG}.")
         return LoadedTable(
             source=source,
             kind="parquet",
@@ -9682,7 +9774,7 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Orientação")
-        st.write("Carregue cada base em sua aba. Por padrão, use **GitHub Release1 (Parquets)** para selecionar os arquivos da release; as opções locais/upload continuam disponíveis.")
+        st.write("Carregue cada base em sua aba. Em **GitHub Release1 (Parquets)**, os arquivos não são pré-selecionados: escolha manualmente os Parquets e clique em carregar.")
         st.write("O painel é exploratório. Para conclusões finais, exporte as tabelas e valide as regras em SQL/Python.")
 
     tabs = st.tabs(["Metodologia", "SINAN", "SIM", "CIHA", "Comparação"])
