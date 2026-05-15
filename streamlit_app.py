@@ -46,7 +46,7 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_VERSION = "2026-05-14-v12-ciha-sim-percentuais-gravidez-puerperio"
+APP_VERSION = "2026-05-15-v13-sinan-cid10-convertido-grafico"
 
 
 CID_RULES = [
@@ -6302,10 +6302,20 @@ def clean_str_expr(col: str) -> str:
 
 
 def clean_code_expr(col: str, pad2: bool = False) -> str:
-    raw = f"NULLIF(regexp_replace(UPPER(COALESCE({clean_str_expr(col)}, '')), '[^0-9A-Z]', '', 'g'), '')"
+    """Normaliza campos de códigos categóricos do DATASUS.
+
+    Alguns arquivos DuckDB/Parquet chegam com códigos como 1.0, 07.0 ou 5,0
+    depois da conversão de tipos. Se apenas removêssemos pontuação, 1.0 viraria
+    10 e 07.0 viraria 070, quebrando CLASSI_FIN, CON_DIAGES, EVOLUCAO etc.
+    """
+    txt = f"UPPER(COALESCE({clean_str_expr(col)}, ''))"
+    numeric_like = f"regexp_matches({txt}, '^\\s*[0-9]+([\\.,]0+)?\\s*$')"
+    numeric_code = f"regexp_replace(TRIM({txt}), '[\\.,]0+$', '')"
+    alnum_code = f"regexp_replace({txt}, '[^0-9A-Z]', '', 'g')"
+    code = f"NULLIF(CASE WHEN {numeric_like} THEN {numeric_code} ELSE {alnum_code} END, '')"
     if pad2:
-        return f"CASE WHEN {raw} IS NULL THEN NULL WHEN LENGTH({raw}) = 1 THEN '0' || {raw} ELSE {raw} END"
-    return raw
+        return f"CASE WHEN {code} IS NULL THEN NULL WHEN LENGTH({code}) = 1 THEN '0' || {code} ELSE {code} END"
+    return code
 
 
 def case_from_mapping(code_sql: str, mapping: Dict[str, str], default: str) -> str:
@@ -7534,25 +7544,57 @@ def query_sinan_etiology_lethality(table: LoadedTable, exprs: Dict[str, Optional
 def query_sinan_diagnostics_by_year(table: LoadedTable, exprs: Dict[str, Optional[str]], where_sql: str) -> pd.DataFrame:
     dt = exprs.get("dt")
     classi = exprs.get("classi_code")
+    cid_group = exprs.get("sinan_cid10_conversion_group")
     cid_type = exprs.get("sinan_cid10_conversion_type")
     include = exprs.get("sinan_cid10_conversion_include")
-    if not (dt and classi and cid_type and include):
+    if not (dt and classi and cid_group and cid_type and include):
         return pd.DataFrame()
+    ordem = """
+        CASE cid10_grupo
+            WHEN 'A17.0' THEN 1
+            WHEN 'A39.0' THEN 2
+            WHEN 'A87' THEN 3
+            WHEN 'G00' THEN 4
+            WHEN 'G01' THEN 5
+            WHEN 'G02' THEN 6
+            WHEN 'G03' THEN 7
+            WHEN 'G04.2' THEN 8
+            ELSE 99
+        END
+    """
     sql = f"""
         WITH base AS (
-            SELECT {dt} AS dt,
+            SELECT CAST(EXTRACT(YEAR FROM {dt}) AS INTEGER) AS ano,
                    {classi} AS classi,
+                   {cid_group} AS cid10_grupo,
                    {cid_type} AS grupo_etiologico
             FROM {table.ref_sql}
             {append_clause(where_sql, f"{classi} = '1' AND {include} = 'Sim'")}
+        ), agg AS (
+            SELECT ano,
+                   cid10_grupo,
+                   grupo_etiologico,
+                   COUNT(*) AS confirmados
+            FROM base
+            WHERE ano IS NOT NULL
+              AND cid10_grupo IS NOT NULL
+              AND grupo_etiologico IS NOT NULL
+            GROUP BY 1, 2, 3
+        ), totais AS (
+            SELECT ano, SUM(confirmados) AS total_ano
+            FROM agg
+            GROUP BY 1
         )
-        SELECT EXTRACT(YEAR FROM dt) AS ano,
-               grupo_etiologico,
-               COUNT(*) AS confirmados
-        FROM base
-        WHERE dt IS NOT NULL AND grupo_etiologico IS NOT NULL
-        GROUP BY 1, 2
-        ORDER BY 1, 2
+        SELECT agg.ano,
+               agg.cid10_grupo,
+               agg.grupo_etiologico,
+               agg.confirmados,
+               totais.total_ano,
+               CASE WHEN totais.total_ano > 0 THEN ROUND(100.0 * agg.confirmados / totais.total_ano, 2) ELSE NULL END AS pct_ano
+        FROM agg
+        JOIN totais USING (ano)
+        WHERE agg.confirmados > 0
+        ORDER BY agg.ano, {ordem}, agg.grupo_etiologico
     """
     return run_query(table, sql)
 
@@ -8145,14 +8187,22 @@ def render_filters(source: str, table: LoadedTable, exprs: Dict[str, Optional[st
                 clauses.append(f"{mun} IN ({', '.join(qstr(x) for x in selected_mun)})")
 
         c5, c6, c7 = st.columns(3)
-        cid_type = exprs.get("cid_type")
-        if cid_type:
-            with c5:
-                cid_opts = top_values(table, cid_type, limit=20)
-                selected_cid = st.multiselect("Tipo CID-10", cid_opts, default=[], key=f"cidtype_filter_{source}")
-            if selected_cid:
-                clauses.append(f"{cid_type} IN ({', '.join(qstr(x) for x in selected_cid)})")
         if source == "SINAN":
+            sinan_cid_type = exprs.get("sinan_cid10_conversion_type")
+            sinan_include = exprs.get("sinan_cid10_conversion_include")
+            if sinan_cid_type:
+                with c5:
+                    opt_where = append_clause("", f"{sinan_include} = 'Sim'") if sinan_include else ""
+                    cid_opts = top_values(table, sinan_cid_type, opt_where, limit=20)
+                    selected_cid = st.multiselect(
+                        "CID-10 convertido (SINAN)",
+                        cid_opts,
+                        default=[],
+                        key=f"sinan_cid10_convertido_filter_{source}",
+                    )
+                    st.caption("Filtro baseado em CON_DIAGES/CLA_ME_BAC/campos complementares, não no ID_AGRAVO bruto.")
+                if selected_cid:
+                    clauses.append(f"{sinan_cid_type} IN ({', '.join(qstr(x) for x in selected_cid)})")
             if exprs.get("classi_label"):
                 with c6:
                     opts = top_values(table, exprs["classi_label"], limit=10)
@@ -8165,12 +8215,20 @@ def render_filters(source: str, table: LoadedTable, exprs: Dict[str, Optional[st
                     selected_con = st.multiselect("Grupo etiológico SINAN", opts, default=[], key=f"con_filter_{source}")
                 if selected_con:
                     clauses.append(f"{exprs['con_group']} IN ({', '.join(qstr(x) for x in selected_con)})")
-        elif source == "CIHA" and exprs.get("modalidade_label"):
-            with c6:
-                opts = top_values(table, exprs["modalidade_label"], limit=10)
-                selected_mod = st.multiselect("Modalidade", opts, default=[], key=f"modalidade_filter_{source}")
-            if selected_mod:
-                clauses.append(f"{exprs['modalidade_label']} IN ({', '.join(qstr(x) for x in selected_mod)})")
+        else:
+            cid_type = exprs.get("cid_type")
+            if cid_type:
+                with c5:
+                    cid_opts = top_values(table, cid_type, limit=20)
+                    selected_cid = st.multiselect("Tipo CID-10", cid_opts, default=[], key=f"cidtype_filter_{source}")
+                if selected_cid:
+                    clauses.append(f"{cid_type} IN ({', '.join(qstr(x) for x in selected_cid)})")
+            if source == "CIHA" and exprs.get("modalidade_label"):
+                with c6:
+                    opts = top_values(table, exprs["modalidade_label"], limit=10)
+                    selected_mod = st.multiselect("Modalidade", opts, default=[], key=f"modalidade_filter_{source}")
+                if selected_mod:
+                    clauses.append(f"{exprs['modalidade_label']} IN ({', '.join(qstr(x) for x in selected_mod)})")
 
     base_where = sql_where(clauses)
     graph_where = append_clause(base_where, definition_clause)
@@ -8213,14 +8271,15 @@ def render_temporal_tab(table: LoadedTable, source: str, graph_where: str, exprs
         freq_label = st.selectbox("Agregação", ["Ano", "Mês", "Semana"], index=1, key=f"freq_{source}")
     freq = {"Ano": "year", "Mês": "month", "Semana": "week"}[freq_label]
     cat_options = {"Nenhuma": None}
-    if exprs.get("cid_type"):
+    if source == "SINAN":
+        if exprs.get("sinan_cid10_conversion_type"):
+            cat_options["CID-10 convertido SINAN"] = exprs["sinan_cid10_conversion_type"]
+        if exprs.get("con_group"):
+            cat_options["Grupo etiológico SINAN"] = exprs["con_group"]
+        if exprs.get("classi_label"):
+            cat_options["CLASSI_FIN"] = exprs["classi_label"]
+    elif exprs.get("cid_type"):
         cat_options["Tipo CID-10"] = exprs["cid_type"]
-    if source == "SINAN" and exprs.get("con_group"):
-        cat_options["Grupo etiológico SINAN"] = exprs["con_group"]
-    if source == "SINAN" and exprs.get("sinan_cid10_conversion_type"):
-        cat_options["CID-10 convertido SINAN"] = exprs["sinan_cid10_conversion_type"]
-    if source == "SINAN" and exprs.get("classi_label"):
-        cat_options["CLASSI_FIN"] = exprs["classi_label"]
     if exprs.get("sex"):
         cat_options["Sexo"] = exprs["sex"]
     with c2:
@@ -8393,15 +8452,30 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
         by_year = query_sinan_diagnostics_by_year(table, exprs, base_where)
         if not by_year.empty:
             st.markdown("**Confirmados por grupo etiológico convertido em CID-10**")
-            st.caption("Usa a classificação CID-10 derivada de CON_DIAGES, CLA_ME_BAC e campos complementares do SINAN, restrita a casos confirmados.")
-            fig4 = px.area(
-                by_year,
+            st.caption(
+                "Usa a classificação CID-10 derivada de CON_DIAGES, CLA_ME_BAC e campos complementares do SINAN, "
+                "restrita a casos confirmados. O ID_AGRAVO/CID bruto do SINAN não é usado para estratificar este gráfico."
+            )
+            plot_by_year = by_year.copy()
+            plot_by_year["ano"] = plot_by_year["ano"].astype(int).astype(str)
+            fig4 = px.bar(
+                plot_by_year,
                 x="ano",
                 y="confirmados",
                 color="grupo_etiologico",
                 title="Confirmados por grupo etiológico convertido em CID-10 — SINAN",
-                labels={"grupo_etiologico": "CID-10 convertido / grupo etiológico", "confirmados": "Confirmados", "ano": "Ano"},
+                labels={
+                    "grupo_etiologico": "CID-10 convertido / grupo etiológico",
+                    "confirmados": "Confirmados",
+                    "ano": "Ano",
+                    "cid10_grupo": "Família CID-10",
+                    "total_ano": "Total no ano",
+                    "pct_ano": "% no ano",
+                },
+                hover_data={"cid10_grupo": True, "total_ano": True, "pct_ano": ":.2f"},
             )
+            fig4.update_layout(barmode="stack")
+            fig4.update_xaxes(type="category")
             st.plotly_chart(fig4, use_container_width=True)
             copyable_dataframe(by_year, use_container_width=True, hide_index=True)
             download_button(by_year, "sinan_confirmados_por_cid10_convertido_ano.csv")
