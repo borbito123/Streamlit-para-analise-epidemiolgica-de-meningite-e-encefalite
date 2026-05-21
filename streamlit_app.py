@@ -50,7 +50,7 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_VERSION = "2026-05-20-v17-cid10-encefalite-conversao"
+APP_VERSION = "2026-05-21-v18-cid10-adequacy-prefixos"
 
 # =============================================================================
 # Controles de desempenho e limites defensivos
@@ -6977,14 +6977,17 @@ def cid10_adequacy_reason_expr(cid_sql: str) -> str:
 
 
 def cid10_adequacy_plot_label_expr(cid_sql: str) -> str:
-    original = cid10_adequacy_original_display_expr(cid_sql)
-    target = cid10_adequacy_type_expr(cid_sql)
-    status = cid10_adequacy_status_expr(cid_sql)
-    return (
-        f"CASE WHEN {cid_sql} IS NULL THEN 'Sem CID de meningite/encefalite detectado' "
-        f"WHEN {status} = 'Convertido' THEN CONCAT({original}, ' → ', {target}) "
-        f"ELSE CONCAT({original}, ' — fora da conversão; mantido como ', {target}) END"
-    )
+    """Categoria usada no gráfico resumido de adequação e na comparação.
+
+    Retorna somente o CID-10 adequado prefixado de destino (G01, G02, G02.0 ou G05)
+    para registros efetivamente convertidos. CIDs fora da tabela de conversão ficam
+    como NULL para não poluir o gráfico com categorias originais não convertidas.
+    """
+    clauses = [
+        f"WHEN {_cid10_adequacy_condition(cid_sql, rule)} THEN {qstr(rule['destino_grupo'])}"
+        for rule in CID10_ADEQUACY_CONVERSION_RULES
+    ]
+    return f"CASE WHEN {cid_sql} IS NULL THEN NULL {' '.join(clauses)} ELSE NULL END"
 
 
 def text_concat_expr(cols: Sequence[str]) -> Optional[str]:
@@ -8074,6 +8077,61 @@ def query_cid10_adequacy_conversion(table: LoadedTable, exprs: Dict[str, Optiona
                  n DESC, cid10_original, cid10_adequado_grupo
     """
     return run_query(table, sql)
+
+def _join_unique_text(values: pd.Series, sep: str = ", ") -> Optional[str]:
+    """Une valores textuais únicos preservando a ordem de aparecimento."""
+    seen: List[str] = []
+    for value in values:
+        if pd.isna(value):
+            continue
+        text = str(value).strip()
+        if not text or text in seen:
+            continue
+        seen.append(text)
+    return sep.join(seen) if seen else None
+
+
+def summarize_cid10_adequacy_plot(df: pd.DataFrame) -> pd.DataFrame:
+    """Agrega a conversão CID-10 no nível do CID adequado usado no gráfico.
+
+    A tabela detalhada continua separando os códigos originais; o gráfico deve
+    somar todos os códigos convertidos para o mesmo destino. Ex.: B58.2 soma em G05.
+    """
+    required = {
+        "status_conversao",
+        "categoria_grafico",
+        "cid10_adequado_grupo",
+        "cid10_adequado_classificacao",
+        "n",
+        "denominador",
+    }
+    if df.empty or not required.issubset(df.columns):
+        return pd.DataFrame()
+
+    converted = df[
+        df["status_conversao"].eq("Convertido")
+        & df["categoria_grafico"].notna()
+        & df["cid10_adequado_grupo"].notna()
+    ].copy()
+    if converted.empty:
+        return pd.DataFrame()
+
+    agg = (
+        converted
+        .groupby(["categoria_grafico", "cid10_adequado_grupo", "cid10_adequado_classificacao"], dropna=False, as_index=False)
+        .agg(
+            n=("n", "sum"),
+            denominador=("denominador", "max"),
+            cid10_originais=("cid10_original", lambda s: _join_unique_text(s, ", ")),
+            cids_detectados=("cids_detectados", lambda s: _join_unique_text(s, ", ")),
+            classificacoes_originais=("classificacoes_originais", lambda s: _join_unique_text(s, "; ")),
+            observacoes=("observacoes", lambda s: _join_unique_text(s, "; ")),
+            campos_origem=("campos_origem", lambda s: _join_unique_text(s, ", ")),
+        )
+    )
+    denom = agg["denominador"].replace({0: np.nan})
+    agg["pct"] = (100.0 * agg["n"] / denom).round(2)
+    return agg.sort_values(["n", "categoria_grafico"], ascending=[False, True]).reset_index(drop=True)
 
 
 def query_sinan_cid10_conversion(table: LoadedTable, exprs: Dict[str, Optional[str]], where_sql: str) -> pd.DataFrame:
@@ -9776,28 +9834,37 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
             conv_adequacy = query_cid10_adequacy_conversion(table, exprs, graph_where)
             if not conv_adequacy.empty:
                 conv_adequacy = add_text(conv_adequacy)
+                conv_adequacy_plot = summarize_cid10_adequacy_plot(conv_adequacy)
                 st.markdown("### Conversão para adequação ao CID-10 de meningite / encefalite")
                 st.caption(CID10_ADEQUACY_OBSERVATION)
-                fig_conv = px.bar(
-                    conv_adequacy,
-                    x="n",
-                    y="categoria_grafico",
-                    orientation="h",
-                    text="texto",
-                    title=f"{source}: Conversão para adequação ao CID-10 de meningite / encefalite",
-                    labels={"categoria_grafico": "CID-10 original → categoria adequada", "n": "Registros", "pct": "% do total detectado"},
-                    hover_data={
-                        "texto": False,
-                        "pct": ":.2f",
-                        "denominador": True,
-                        "status_conversao": True,
-                        "cids_detectados": True,
-                        "observacoes": True,
-                        "campos_origem": True,
-                    },
-                )
-                fig_conv.update_layout(yaxis={"categoryorder": "total ascending"})
-                st.plotly_chart(fig_conv, use_container_width=True)
+                if conv_adequacy_plot.empty:
+                    st.info("Não houve CID-10 convertido para os prefixos de adequação no recorte atual.")
+                else:
+                    conv_adequacy_plot = add_text(conv_adequacy_plot)
+                    fig_conv = px.bar(
+                        conv_adequacy_plot,
+                        x="n",
+                        y="categoria_grafico",
+                        orientation="h",
+                        text="texto",
+                        title=f"{source}: Conversão para adequação ao CID-10 de meningite / encefalite",
+                        labels={"categoria_grafico": "CID-10 adequado (prefixo)", "n": "Registros", "pct": "% do total detectado"},
+                        hover_data={
+                            "texto": False,
+                            "pct": ":.2f",
+                            "denominador": True,
+                            "cid10_adequado_classificacao": True,
+                            "cid10_originais": True,
+                            "cids_detectados": True,
+                            "campos_origem": True,
+                        },
+                    )
+                    fig_conv.update_layout(yaxis={"categoryorder": "total ascending"})
+                    st.plotly_chart(fig_conv, use_container_width=True)
+                    st.caption(
+                        "Gráfico agregado pelo CID-10 adequado de destino. "
+                        "Os CID-10 originais convertidos permanecem detalhados na tabela abaixo."
+                    )
                 display_cols = [
                     c for c in [
                         "cid10_original", "cid10_adequado_grupo", "cid10_adequado_classificacao",
@@ -10456,7 +10523,7 @@ def render_comparison(loaded: Sequence[Dict[str, object]]) -> None:
     freq = {"Ano": "year", "Mês": "month", "Semana": "week"}[freq_label]
     normalize = st.checkbox("Normalizar em índice 100 no primeiro período não-zero", value=False, key="comp_norm")
     stratify_cid = st.checkbox("Estratificar por tipo CID-10 quando disponível", value=False, key="comp_cid")
-    st.caption("Na comparação, o SINAN entra sempre como casos confirmados (CLASSI_FIN = 1), independentemente da definição exploratória escolhida na aba SINAN. Quando há estratificação por CID-10, o SINAN usa a conversão de CON_DIAGES; SIM/CIHA usam a conversão para adequação ao CID-10 de meningite / encefalite, mantendo no denominador os CID-10 fora da conversão. Na agregação mensal, meses sem registros são mantidos com valor zero.")
+    st.caption("Na comparação, o SINAN entra sempre como casos confirmados (CLASSI_FIN = 1), independentemente da definição exploratória escolhida na aba SINAN. Quando há estratificação por CID-10, o SINAN usa a conversão de CON_DIAGES; SIM/CIHA usam os mesmos CID-10 adequados prefixados do gráfico de conversão (G01, G02, G02.0 e G05). CID-10 fora da tabela de conversão não aparecem nas séries estratificadas. Na agregação mensal, meses sem registros são mantidos com valor zero.")
 
     frames = []
     for item in available:
@@ -10468,8 +10535,8 @@ def render_comparison(loaded: Sequence[Dict[str, object]]) -> None:
         if stratify_cid:
             if source_name == "SINAN" and exprs.get("sinan_cid10_conversion_type"):
                 cat = exprs.get("sinan_cid10_conversion_type")
-            elif source_name in {"SIM", "CIHA"} and exprs.get("cid10_adequacy_type"):
-                cat = exprs.get("cid10_adequacy_type")
+            elif source_name in {"SIM", "CIHA"} and exprs.get("cid10_adequacy_plot_label"):
+                cat = exprs.get("cid10_adequacy_plot_label")
             else:
                 cat = exprs.get("cid_type")
         else:
