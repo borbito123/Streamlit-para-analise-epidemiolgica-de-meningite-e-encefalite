@@ -50,7 +50,7 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_VERSION = "2026-05-21-v19-cid10-adequacy-prefixos-com-convertidos"
+APP_VERSION = "2026-05-21-v20-cid10-adequacy-g02-sem-g020"
 
 # =============================================================================
 # Controles de desempenho e limites defensivos
@@ -393,7 +393,6 @@ CID_G02_PRESENT_REGEX = r"\*?G02[\.]?[0-9A-Z]?\*?"
 CID10_ADEQUACY_TARGET_LABELS = {
     "G01": "G01 — meningite bacteriana em doença classificada em outra parte",
     "G02": "G02 — meningite em outras doenças infecciosas/parasitárias",
-    "G02.0": "G02.0 — meningite em doenças virais classificadas em outra parte",
     "G05": "G05 — encefalite, mielite e encefalomielite em doenças classificadas em outra parte",
 }
 
@@ -437,14 +436,14 @@ CID10_ADEQUACY_CONVERSION_RULES = [
     {
         "origem_grupo": "B00.3", "origem_prefixo": "B003", "origem_padrao": "B00.3", "match": "exact",
         "origem_rotulo": "B00.3 — meningite devida ao vírus do herpes",
-        "destino_grupo": "G02.0", "destino_rotulo": CID10_ADEQUACY_TARGET_LABELS["G02.0"],
-        "observacao": "B00.3 — meningite devida ao vírus do herpes convertida para G02.0.",
+        "destino_grupo": "G02", "destino_rotulo": CID10_ADEQUACY_TARGET_LABELS["G02"],
+        "observacao": "B00.3 — meningite devida ao vírus do herpes convertida para G02.",
     },
     {
         "origem_grupo": "B00.4", "origem_prefixo": "B004", "origem_padrao": "B00.4", "match": "exact",
         "origem_rotulo": "B00.4 — encefalite devida ao vírus do herpes",
-        "destino_grupo": "G02.0", "destino_rotulo": CID10_ADEQUACY_TARGET_LABELS["G02.0"],
-        "observacao": "B00.4 — encefalite devida ao vírus do herpes convertida para G02.0.",
+        "destino_grupo": "G02", "destino_rotulo": CID10_ADEQUACY_TARGET_LABELS["G02"],
+        "observacao": "B00.4 — encefalite devida ao vírus do herpes convertida para G02.",
     },
     {
         "origem_grupo": "B01.0", "origem_prefixo": "B010", "origem_padrao": "B01.0", "match": "exact",
@@ -552,7 +551,7 @@ CID10_ADEQUACY_MAPPING_ROWS = [
 CID10_ADEQUACY_OBSERVATION = (
     "Observação: A22.8 é convertido para G01; A32.1, A83*, A84*, A85*, A86*, "
     "B01.1, B02.0, B02.1, B05.0, B06*, B26.2, B57.4, B58.2 e B60.2 são convertidos para G05; "
-    "B00.3 e B00.4 são convertidos para G02.0; B01.0, B05.1, B26.1, B37.5, B38.4 e B45.1 são convertidos para G02. "
+    "B00.3, B00.4, B01.0, B05.1, B26.1, B37.5, B38.4 e B45.1 são convertidos para G02. "
     "Os demais CID-10 detectados ficam fora da conversão e permanecem no denominador para preservar o total de casos do recorte/ano."
 )
 
