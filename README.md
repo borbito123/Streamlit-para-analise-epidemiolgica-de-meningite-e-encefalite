@@ -87,7 +87,7 @@ A se ponderar: A17 e A39 se enquadrariam no CID G01, então fica o questionament
 - Comparação temporal (semanas, meses, anos)
 - Possibilidade de estratiificar por CID-10.
 
-Observação: - A comparação entre bases é **exploratória** e faz mais sentido quando o agravo, o território e a janela temporal são os mesmos.
+Observação: A comparação entre bases é **exploratória** e faz mais sentido quando o agravo, o território e a janela temporal são os mesmos.
 
 # _Instalação_
 
@@ -107,7 +107,7 @@ streamlit run app_streamlit_app.py
 
 ## _Como usar_
 
-Disclaimer: Atenção ao limite de parquets / duckdbs em vigor. Isso pode ser alterado, mas bastante cuidado em quantos arquivos são carregados simultaneamente.
+Disclaimer: Atenção ao limite de parquets / duckdbs que estão sendo lidos ao mesmo tempo em uma única seção. Isso pode ser alterado, mas bastante cuidado em quantos arquivos são carregados simultaneamente.
 
 ### Opção 1: leitura automática dos parquets disponibilizados na release mais atual do github
 Basta selecionar quais anos deseja-se analisar. 
