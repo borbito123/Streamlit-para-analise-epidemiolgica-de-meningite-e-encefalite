@@ -1,7 +1,7 @@
-streamlit>=1.32
-pandas>=2.1
-duckdb>=1.0
-pyarrow>=14.0
-plotly>=5.20
-numpy>=1.26
-fastparquet
+duckdb>=1.0,<1.5
+pandas>=2.2,<3.0
+numpy>=1.26,<3.0
+streamlit>=1.57,<1.58
+pyarrow>=14,<25
+plotly>=5.20,<7.0
+fastparquet>=2024.0
