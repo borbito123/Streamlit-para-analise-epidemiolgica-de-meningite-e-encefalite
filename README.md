@@ -79,7 +79,7 @@ Explicando o que foi feito na tabela de conversão encontrada no CIHA:
 - Comparação temporal (semanas, meses, anos)
 - Possibilidade de estratiificar por CID-10.
 
-## _Instalação_
+3) Instalação
 
 Crie e ative um ambiente virtual, se desejar, e depois instale as dependências:
 
@@ -92,7 +92,7 @@ pip install -r requirements.txt
 No diretório do projeto, rode:
 
 ```bash
-streamlit run app_streamlit_epidemiologia.py
+streamlit run app_streamlit_app.py
 ```
 
 ## _Como usar_
@@ -111,15 +111,7 @@ Bases_Datasus_Municipio_Rio_de_Janeiro/SIM/data/parquet/*.parquet
 Bases_Datasus_Municipio_Rio_de_Janeiro/CIHA/data/parquet/*.parquet
 ```
 
-## _Observações importantes_
+4) Observações importantes
 
 - Se os parquets já estiverem filtrados para um município específico, os gráficos respeitarão esse recorte.
 - A comparação entre bases é **exploratória** e faz mais sentido quando o agravo, o território e a janela temporal são os mesmos.
-
-## _Sugestões de uso epidemiológico_
-
-- Use a **série temporal** como gráfico principal para monitorar tendência.
-- Use o **heatmap ano × mês** para sazonalidade.
-- Use a **pirâmide etária por sexo** para perfil demográfico.
-- Use **top diagnósticos/desfechos** para caracterização clínica e gravidade.
-- Use a **completude** para avaliar qualidade da informação antes de interpretar resultados.
