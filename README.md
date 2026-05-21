@@ -55,7 +55,7 @@ _Observação: Para contornar eventuais problemas de memória ou crashes do apli
 
 _Explicando o que foi feito na tabela de conversão encontrada no SINAN:_ Originalmente, o SINAN agrupa todos os seus casos sob o CID "G03.9". Caso haja diagnóstico e confirmação, então se especifica a meningite em algumas categorias (veja a seção "Classificação do Caso" em https://portalsinan.saude.gov.br/images/documentos/Agravos/Meningite/Meningite_v5.pdf). Na seção "CID-10 / classificação", haverá um gráfico de conversão que aloca todos os casos confirmados e os enquadra em algum dos seguintes CID: G00, G01, G02, G03, G04, G05, A39, A17, A87.
 
-A se ponderar: A17 e A39 se enquadrariam no CID G01, então fica o questionamento se é mais pertinente simplesmente incluir essas duas categorias sob um único CID ou se é válida a divisão atualmente vigente.
+A se ponderar: A17 e A39 se enquadrariam no CID G01, mas atualmnte se encontram separadas. Em contrapartida, meningite por haemophilus e meningocóccica já foram incluídas no CID G00. Isso representaria uma certa inconsistência que precisaria ser corrigida.
 
 A referência utilizada para alocação foi: https://portalsinan.saude.gov.br/images/documentos/Agravos/Meningite/Meningite_v5.pdf.
 
@@ -69,7 +69,7 @@ A referência utilizada para alocação foi: https://portalsinan.saude.gov.br/im
 
 _Explicando o que foi feito na tabela de conversão encontrada no SIM:_ Por conta do jeito que o banco de dados é preenchido e disponiblizado, muitos CIDs que são incluídos em um dos CIDs prefixados (G00, G01, G02, G03, G04, G05) ficariam perdidos se o script de conversão não procurasse por eles explicitamente. Desse modo, os novos CIDs mencionados na seção "Baixando os bancos de dados e convertendo-os" deste readme.md foram inclusos para evitar que não fossem perdidos. Na seção "CID-10 / classificação", haverá um gráfico de conversão que aloca todos os casos confirmados e os enquadra em algum dos seguintes CID: G00, G01, G02, G03, G04, G05, A39, A17, A87.
 
-A se ponderar: A17 e A39 se enquadrariam no CID G01, então fica o questionamento se é mais pertinente simplesmente incluir essas duas categorias sob um único CID ou se é válida a divisão atualmente vigente.
+A se ponderar: A17 e A39 se enquadrariam no CID G01, mas atualmnte se encontram separadas. Em contrapartida, meningite por haemophilus e meningocóccica já foram incluídas no CID G00. Isso representaria uma certa inconsistência que precisaria ser corrigida. 
 
 ### Para CIHA
 - Indicadores -> Fornece: o total de atendimentos e as mortes administrativas, dias de permanênca no ambiente hospitalar, 
@@ -81,7 +81,7 @@ A se ponderar: A17 e A39 se enquadrariam no CID G01, então fica o questionament
 
 _Explicando o que foi feito na tabela de conversão encontrada no CIHA:_ Por conta do jeito que o banco de dados é preenchido e disponiblizado, muitos CIDs que são incluídos em um dos CIDs prefixados (G00, G01, G02, G03, G04, G05) ficariam perdidos se o script de conversão não procurasse por eles explicitamente. Desse modo, os novos CIDs mencionados na seção "Baixando os bancos de dados e convertendo-os" deste readme.md foram inclusos para evitar que não fossem perdidos. Na seção "CID-10 / classificação", haverá um gráfico de conversão que aloca todos os casos confirmados e os enquadra em algum dos seguintes CID: G00, G01, G02, G03, G04, G05, A39, A17, A87.
 
-A se ponderar: A17 e A39 se enquadrariam no CID G01, então fica o questionamento se é mais pertinente simplesmente incluir essas duas categorias sob um único CID ou se é válida a divisão atualmente vigente.
+A se ponderar: A17 e A39 se enquadrariam no CID G01, mas atualmnte se encontram separadas. Em contrapartida, meningite por haemophilus e meningocóccica já foram incluídas no CID G00. Isso representaria uma certa inconsistência que precisaria ser corrigida. 
 
 ### Comparação entre bancos de dados
 - Comparação temporal (semanas, meses, anos)
