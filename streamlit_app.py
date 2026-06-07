@@ -2,7 +2,7 @@
 """
 Painel epidemiológico para meningite — SINAN, SIM e CIHA
 
-O app aceita arquivos DuckDB, Parquet local/upload ou Parquets da release GitHub, calcula indicadores descritivos e separa:
+O app aceita upload de DuckDB, upload de Parquet ou bancos hospedados no github em Parquet, calcula indicadores descritivos e separa:
 - CID-10 bruto do caso/óbito/atendimento;
 - classificação epidemiológica específica do SINAN, especialmente CON_DIAGES;
 - definições operacionais de série: notificações, confirmados, descartados, óbitos etc.
@@ -16,12 +16,12 @@ Dependências:
 
 from __future__ import annotations
 
-import glob
 import hashlib
 import html as html_lib
 import json
 import re
 import tempfile
+import threading
 import textwrap
 import unicodedata
 import urllib.error
@@ -49,13 +49,13 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_VERSION = "2026-05-21-v20-cid10-adequacy-g02-sem-g020"
+APP_VERSION = "2026-06-07-v24-lcr-indicadores-cid-comparacao-obitos-red"
 
 # =============================================================================
 # Controles de desempenho e limites defensivos
 # =============================================================================
 
-DEFAULT_MAX_PARQUET_FILES_PER_LOAD = 15
+DEFAULT_MAX_PARQUET_FILES_PER_LOAD = 20
 DEFAULT_DISPLAY_ROW_LIMIT = 1000
 DEFAULT_COPY_ROW_LIMIT = 300
 DEFAULT_DOWNLOAD_ROW_LIMIT = 50000
@@ -66,8 +66,236 @@ DEFAULT_FULL_EXPORT_ROW_LIMIT = 100000
 UPLOAD_CHUNK_SIZE = 1024 * 1024
 DEFAULT_DUCKDB_MEMORY_LIMIT = "2GB"
 DEFAULT_DUCKDB_THREADS = 2
-DEFAULT_QUERY_CACHE_MAX_ENTRIES = 96
+DEFAULT_QUERY_CACHE_MAX_ENTRIES = 128
 DUCKDB_TEMP_SUBDIR = "meningite_duckdb_tmp"
+DEATH_RED = "#D62728"
+LETHALITY_RED = DEATH_RED
+LETHALITY_LABEL = "Letalidade — óbitos por meningite / confirmados"
+PLOTLY_DEFAULT_BLUE = "#636EFA"
+DEATH_COLOR_TERMS = (
+    "obit",
+    "obito",
+    "obitos",
+    "morte",
+    "mortes",
+    "mortal",
+    "mortalidade",
+    "letal",
+    "letalidade",
+    "fatal",
+    "fatalidade",
+    "death",
+    "deaths",
+)
+PLOTLY_CONFIG = {
+    "displaylogo": False,
+    "responsive": True,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+}
+
+
+# =============================================================================
+# Aparência geral da aplicação e dos gráficos
+# =============================================================================
+
+def _norm_ui_text(value: object) -> str:
+    """Normaliza texto apenas para testes internos de rótulos/cores."""
+    text = str(value or "")
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return text.lower()
+
+
+def _text_mentions_death(value: object) -> bool:
+    text = _norm_ui_text(value)
+    return any(term in text for term in DEATH_COLOR_TERMS)
+
+
+def render_app_css() -> None:
+    """Aplica ajustes discretos de legibilidade sem alterar a navegação do app."""
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 1.25rem;
+            padding-bottom: 2.5rem;
+            max-width: 1480px;
+        }
+        h1, h2, h3 {
+            letter-spacing: -0.015em;
+            line-height: 1.18;
+        }
+        div[data-testid="stCaptionContainer"] p {
+            line-height: 1.45;
+        }
+        div[data-testid="stMetric"] {
+            background: rgba(250, 250, 250, 0.72);
+            border: 1px solid rgba(49, 51, 63, 0.10);
+            border-radius: 0.75rem;
+            padding: 0.65rem 0.8rem;
+        }
+        div[data-testid="stDataFrame"] {
+            border: 1px solid rgba(49, 51, 63, 0.10);
+            border-radius: 0.55rem;
+        }
+        section[data-testid="stSidebar"] .stRadio label,
+        section[data-testid="stSidebar"] .stCheckbox label {
+            line-height: 1.3;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _axis_text_values(fig: go.Figure) -> List[str]:
+    values: List[str] = []
+    for axis_name in ("xaxis", "yaxis"):
+        try:
+            axis = getattr(fig.layout, axis_name)
+            values.append(str(axis.title.text or ""))
+        except Exception:
+            pass
+    return values
+
+
+def _layout_text_values(fig: go.Figure) -> List[str]:
+    values: List[str] = []
+    try:
+        values.append(str(fig.layout.title.text or ""))
+    except Exception:
+        pass
+    values.extend(_axis_text_values(fig))
+    try:
+        values.append(str(fig.layout.legend.title.text or ""))
+    except Exception:
+        pass
+    return values
+
+
+def _figure_axis_mentions_death(fig: go.Figure) -> bool:
+    return any(_text_mentions_death(value) for value in _axis_text_values(fig))
+
+
+def _figure_context_mentions_death(fig: go.Figure) -> bool:
+    return any(_text_mentions_death(value) for value in _layout_text_values(fig))
+
+
+def _sequence_values(values: object) -> List[object]:
+    if values is None:
+        return []
+    if isinstance(values, (str, bytes)):
+        return [values]
+    try:
+        return list(values)
+    except Exception:
+        return []
+
+
+def _expand_marker_colors(existing_color: object, n: int) -> List[object]:
+    if n <= 0:
+        return []
+    if isinstance(existing_color, (str, bytes)):
+        return [existing_color] * n
+    values = _sequence_values(existing_color)
+    if values:
+        if len(values) >= n:
+            return values[:n]
+        return values + [values[-1]] * (n - len(values))
+    return [PLOTLY_DEFAULT_BLUE] * n
+
+
+def _bar_category_values(trace: go.BaseTraceType) -> List[object]:
+    x_vals = _sequence_values(getattr(trace, "x", None))
+    y_vals = _sequence_values(getattr(trace, "y", None))
+    orientation = str(getattr(trace, "orientation", "") or "")
+    if orientation == "h" and y_vals:
+        return y_vals
+    if orientation != "h" and x_vals:
+        return x_vals
+    return y_vals or x_vals
+
+
+def _apply_death_red_to_bar_points(trace: go.BaseTraceType) -> bool:
+    if str(getattr(trace, "type", "")) != "bar":
+        return False
+    category_values = _bar_category_values(trace)
+    if not category_values:
+        return False
+    mask = [_text_mentions_death(value) for value in category_values]
+    if not any(mask):
+        return False
+    try:
+        existing_color = trace.marker.color
+    except Exception:
+        existing_color = None
+    base_colors = _expand_marker_colors(existing_color, len(mask))
+    colors = [DEATH_RED if is_death else base_colors[idx] for idx, is_death in enumerate(mask)]
+    try:
+        trace.update(marker_color=colors)
+        return True
+    except Exception:
+        return False
+
+
+def _trace_mentions_death(trace: go.BaseTraceType) -> bool:
+    values = [
+        getattr(trace, "name", ""),
+        getattr(trace, "legendgroup", ""),
+        getattr(trace, "hovertemplate", ""),
+    ]
+    return any(_text_mentions_death(value) for value in values)
+
+
+def enforce_death_related_red(fig: go.Figure) -> None:
+    """Garante vermelho para traços, barras ou gráficos identificados como óbito/morte/letalidade."""
+    if fig is None:
+        return
+    data = list(getattr(fig, "data", []) or [])
+    axis_mentions_death = _figure_axis_mentions_death(fig)
+    context_mentions_death = _figure_context_mentions_death(fig)
+    for trace in data:
+        point_level_colored = _apply_death_red_to_bar_points(trace)
+        is_death_trace = (
+            axis_mentions_death
+            or _trace_mentions_death(trace)
+            or (context_mentions_death and len(data) == 1 and not point_level_colored)
+        )
+        if not is_death_trace:
+            continue
+        for update_kwargs in (
+            {"line_color": DEATH_RED},
+            {"marker_color": DEATH_RED},
+        ):
+            try:
+                trace.update(**update_kwargs)
+            except Exception:
+                pass
+
+
+def style_plotly_figure(fig: go.Figure) -> go.Figure:
+    """Padroniza margem, legenda, fonte e cor de óbito/letalidade em todos os gráficos."""
+    if fig is None:
+        return fig
+    enforce_death_related_red(fig)
+    trace_types = {str(getattr(trace, "type", "")) for trace in (getattr(fig, "data", []) or [])}
+    is_line_like = bool(trace_types) and trace_types.issubset({"scatter", "scattergl"})
+    fig.update_layout(
+        template="plotly_white",
+        margin={"l": 24, "r": 24, "t": 70, "b": 48},
+        font={"size": 13},
+        title={"x": 0.0, "xanchor": "left"},
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "left", "x": 0},
+        hoverlabel={"align": "left"},
+        hovermode="x unified" if is_line_like else "closest",
+    )
+    fig.update_xaxes(automargin=True, showgrid=True, zeroline=False)
+    fig.update_yaxes(automargin=True, zeroline=False)
+    return fig
+
+
+def render_plotly_chart(fig: go.Figure) -> None:
+    """Renderiza Plotly com configuração leve e consistente."""
+    st.plotly_chart(style_plotly_figure(fig), width="stretch", config=PLOTLY_CONFIG)
 
 
 def _session_int(key: str, default: int) -> int:
@@ -165,8 +393,22 @@ def render_performance_controls() -> None:
             key="perf_full_export_row_limit",
             help="A exportação completa só é habilitada quando os filtros reduzem o total para este limite.",
         )
+        st.checkbox(
+            "Materializar bases Parquet em memória (mais rápido)",
+            value=bool(st.session_state.get("perf_materialize_tables", True)),
+            key="perf_materialize_tables",
+            help=(
+                "Lê cada Parquet uma única vez para uma tabela nativa do DuckDB; as consultas "
+                "seguintes não reprocessam o Parquet. Desmarque para usar VIEW (lazy) em ambientes "
+                "com pouca memória — ainda assim a conexão é reaproveitada entre consultas."
+            ),
+        )
         if st.button("Limpar cache de consultas", key="clear_query_cache"):
             st.cache_data.clear()
+            try:
+                st.cache_resource.clear()
+            except Exception:
+                pass
             st.success("Cache limpo. As próximas consultas serão recalculadas.")
 
 
@@ -177,6 +419,7 @@ def render_performance_controls() -> None:
 GITHUB_RELEASE_OWNER = "borbito123"
 GITHUB_RELEASE_REPO = "Teste---Dados-Epidemiol-gicos-para-meningite-SINAN-CIHA-SIM---Rio-de-Janeiro"
 GITHUB_RELEASE_TAG = "Release1"
+GITHUB_HOSTED_PARQUETS_LABEL = "Bancos hospedados no github (Parquets)"
 GITHUB_RELEASE_PAGE_URL = (
     f"https://github.com/{GITHUB_RELEASE_OWNER}/{GITHUB_RELEASE_REPO}/releases/tag/{GITHUB_RELEASE_TAG}"
 )
@@ -7589,6 +7832,15 @@ def parquet_ref(paths: Sequence[str]) -> str:
 
 def materialize_upload(upload, namespace: str) -> str:
     """Materializa upload em arquivo temporário sem duplicar todo o conteúdo em memória."""
+    upload_id = str(getattr(upload, "file_id", "") or "")
+    upload_size = str(getattr(upload, "size", "") or "")
+    session_key = ""
+    if upload_id:
+        session_key = f"materialized_upload::{namespace}::{upload_id}::{upload.name}::{upload_size}"
+        cached_path = st.session_state.get(session_key)
+        if cached_path and Path(str(cached_path)).exists():
+            return str(cached_path)
+
     suffix = Path(upload.name).suffix or ".dat"
     clean_name = safe_filename(Path(upload.name).stem)
     temp_dir = Path(tempfile.gettempdir())
@@ -7620,6 +7872,8 @@ def materialize_upload(upload, namespace: str) -> str:
             tmp_path.unlink(missing_ok=True)
         else:
             tmp_path.replace(out)
+        if session_key:
+            st.session_state[session_key] = str(out)
         return str(out)
     except Exception:
         tmp_path.unlink(missing_ok=True)
@@ -7665,6 +7919,7 @@ def configure_duckdb_connection(
         f"SET threads={int(max(1, threads))}",
         f"SET temp_directory={qstr(str(temp_path))}",
         "SET preserve_insertion_order=false",
+        "SET enable_object_cache=true",
     ]
     for statement in statements:
         try:
@@ -7705,15 +7960,152 @@ def table_cache_key(table: LoadedTable) -> Tuple[object, ...]:
     return (table.kind, table.ref_sql, duckdb_meta, parquet_meta)
 
 
-def _execute_query_uncached(table: LoadedTable, sql: str) -> pd.DataFrame:
-    con = open_duckdb_connection(
-        table.db_path if table.kind == "duckdb" else None,
-        read_only=(table.kind == "duckdb"),
-    )
+# =============================================================================
+# Conexão DuckDB persistente + materialização de Parquets
+# -----------------------------------------------------------------------------
+# Antes, cada consulta abria uma conexão :memory: nova e embutia
+# read_parquet([...]) no FROM, re-decodificando os mesmos Parquets a cada
+# query (dezenas por render). Agora mantemos UMA conexão in-memory viva entre
+# reruns (cache_resource) e materializamos cada base Parquet em uma tabela
+# nativa do DuckDB uma única vez. As consultas seguintes leem armazenamento
+# colunar nativo (sem reparse de Parquet, com predicate pushdown e zone maps).
+# =============================================================================
+
+class _SharedDB:
+    """Encapsula a conexão in-memory persistente, o registro de objetos já
+    materializados e o lock de DDL — todos com o mesmo ciclo de vida.
+
+    Usar um único objeto cacheado evita atribuir atributos no tipo C do DuckDB
+    e garante que conexão e registro nunca fiquem dessincronizados (ex.: se um
+    fosse despejado do cache e o outro não).
+    """
+
+    def __init__(self, con: duckdb.DuckDBPyConnection) -> None:
+        self.con = con
+        self.registry: Dict[str, str] = {}
+        self.lock = threading.Lock()
+
+
+@st.cache_resource(show_spinner=False)
+def get_duckdb_file_db(
+    db_path: str,
+    runtime_settings: Tuple[str, int, str],
+    file_fingerprint: Tuple[str, Optional[int], Optional[int]],
+) -> "_SharedDB":
+    """Mantém conexão read-only de DuckDB entre consultas da mesma base.
+
+    O fingerprint entra na chave do cache; se o arquivo mudar, a conexão antiga
+    deixa de ser reutilizada para as novas consultas.
+    """
+    con = duckdb.connect(db_path, read_only=True)
+    configure_duckdb_connection(con, runtime_settings)
+    return _SharedDB(con)
+
+
+def _query_duckdb_file(db_path: Optional[str], sql: str, runtime_settings: Tuple[str, int, str]) -> pd.DataFrame:
+    if not db_path:
+        return pd.DataFrame()
+    shared = get_duckdb_file_db(db_path, runtime_settings, _file_fingerprint(db_path))
+    with shared.lock:
+        cur = shared.con.cursor()
+        try:
+            return cur.execute(sql).df()
+        finally:
+            cur.close()
+
+
+def parquet_object_name(source: str, paths: Sequence[str]) -> str:
+    """Identificador estável da base Parquet, derivado do conteúdo dos arquivos.
+
+    Inclui caminho + tamanho + mtime no hash: se qualquer arquivo mudar, o nome
+    muda, forçando a recriação da tabela materializada e invalidando o cache.
+    """
+    fingerprints = [_file_fingerprint(p) for p in (paths or [])]
+    raw = json.dumps([source, fingerprints], sort_keys=True, default=str)
+    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+    safe_source = re.sub(r"[^0-9A-Za-z]+", "_", str(source)) or "src"
+    return f"pq_{safe_source}_{digest}"
+
+
+def _should_materialize() -> bool:
+    """Materializar Parquet em tabela nativa (padrão) ou usar VIEW (lazy)."""
+    return bool(st.session_state.get("perf_materialize_tables", True))
+
+
+@st.cache_resource(show_spinner=False)
+def get_shared_db(runtime_settings: Tuple[str, int, str]) -> "_SharedDB":
+    """Conexão in-memory única, reutilizada entre reruns e consultas.
+
+    Persistir a conexão evita reconectar, reconfigurar PRAGMAs e relistar
+    arquivos a cada query, além de manter o catálogo (tabelas materializadas)
+    e o cache de metadados de Parquet aquecidos.
+    """
+    con = duckdb.connect(database=":memory:")
+    configure_duckdb_connection(con, runtime_settings)
+    return _SharedDB(con)
+
+
+def _ensure_parquet_object(
+    shared: "_SharedDB",
+    name: str,
+    paths: Sequence[str],
+    materialize: bool,
+) -> None:
+    """Garante que `name` exista na conexão como tabela (materializada) ou VIEW.
+
+    Idempotente: cria apenas uma vez por base. Se a materialização falhar
+    (ex.: memória insuficiente), cai automaticamente para VIEW sem quebrar o app.
+    """
+    desired_kind = "table" if materialize else "view"
+    if shared.registry.get(name) == desired_kind:
+        return
+    with shared.lock:
+        if shared.registry.get(name) == desired_kind:
+            return
+        con = shared.con
+        ident = qident(name)
+        src = parquet_ref(paths)
+        # Remove qualquer objeto anterior de mesmo nome (ex.: troca tabela<->view).
+        for drop_stmt in (f"DROP VIEW IF EXISTS {ident}", f"DROP TABLE IF EXISTS {ident}"):
+            try:
+                con.execute(drop_stmt)
+            except Exception:
+                pass
+        made: Optional[str] = None
+        if materialize:
+            try:
+                con.execute(f"CREATE TABLE {ident} AS SELECT * FROM {src}")
+                made = "table"
+            except Exception:
+                made = None  # fallback para VIEW abaixo
+        if made is None:
+            con.execute(f"CREATE VIEW {ident} AS SELECT * FROM {src}")
+            made = "view"
+        shared.registry[name] = made
+
+
+def _prepare_parquet(table: LoadedTable, runtime_settings: Tuple[str, int, str]) -> None:
+    """Registra a base Parquet na conexão persistente antes de consultar."""
+    if table.kind == "parquet" and table.parquet_paths:
+        shared = get_shared_db(runtime_settings)
+        _ensure_parquet_object(shared, table.ref_sql, table.parquet_paths, _should_materialize())
+
+
+def _query_shared(sql: str, runtime_settings: Tuple[str, int, str]) -> pd.DataFrame:
+    """Executa na conexão persistente usando um cursor isolado (seguro p/ threads)."""
+    shared = get_shared_db(runtime_settings)
+    cur = shared.con.cursor()
     try:
-        return con.execute(sql).df()
+        return cur.execute(sql).df()
     finally:
-        con.close()
+        cur.close()
+
+
+def _execute_query_uncached(table: LoadedTable, sql: str) -> pd.DataFrame:
+    runtime_settings = duckdb_runtime_settings()
+    if table.kind == "duckdb":
+        return _query_duckdb_file(table.db_path, sql, runtime_settings)
+    return _query_shared(sql, runtime_settings)
 
 
 @st.cache_data(show_spinner=False, ttl=1800, max_entries=DEFAULT_QUERY_CACHE_MAX_ENTRIES)
@@ -7724,26 +8116,22 @@ def _run_query_cached(
     sql: str,
     runtime_settings: Tuple[str, int, str],
 ) -> pd.DataFrame:
-    con = open_duckdb_connection(
-        db_path if kind == "duckdb" else None,
-        read_only=(kind == "duckdb"),
-        runtime_settings=runtime_settings,
-    )
-    try:
-        return con.execute(sql).df()
-    finally:
-        con.close()
+    if kind == "duckdb":
+        return _query_duckdb_file(db_path, sql, runtime_settings)
+    return _query_shared(sql, runtime_settings)
 
 
 def run_query(table: LoadedTable, sql: str, cache: bool = True) -> pd.DataFrame:
     """Executa SQL; por padrão cacheia apenas resultados de consulta agregada/pequena."""
+    runtime_settings = duckdb_runtime_settings()
+    _prepare_parquet(table, runtime_settings)
     if cache:
         return _run_query_cached(
             table_cache_key(table),
             table.kind,
             table.db_path,
             sql,
-            duckdb_runtime_settings(),
+            runtime_settings,
         )
     return _execute_query_uncached(table, sql)
 
@@ -9674,18 +10062,22 @@ def render_loader(source: str) -> Optional[LoadedTable]:
     st.markdown(f"### {source} — {cfg.title}")
     st.caption(f"Período esperado no arquivo enviado: {cfg.expected_period}")
 
+    load_modes = [GITHUB_HOSTED_PARQUETS_LABEL, "Upload DuckDB", "Upload Parquet"]
+    load_mode_key = f"load_mode_{source}"
+    if st.session_state.get(load_mode_key) not in (None, *load_modes):
+        st.session_state.pop(load_mode_key, None)
     mode = st.radio(
         "Fonte de dados",
-        ["GitHub Release1 (Parquets)", "DuckDB local", "Upload DuckDB", "Parquet local/glob", "Upload Parquet"],
+        load_modes,
         horizontal=True,
-        key=f"load_mode_{source}",
+        key=load_mode_key,
     )
 
-    if mode == "GitHub Release1 (Parquets)":
+    if mode == GITHUB_HOSTED_PARQUETS_LABEL:
         st.caption(f"Fonte padrão: {GITHUB_RELEASE_PAGE_URL}")
         st.info(
-            "Nenhum Parquet da release é carregado automaticamente. "
-            "Marque manualmente os arquivos desejados e clique em **Carregar/atualizar seleção**."
+            "Nenhum banco hospedado no github é carregado automaticamente. "
+            "Marque manualmente os Parquets desejados e clique em **Carregar/atualizar seleção**."
         )
         try:
             release_assets = list_github_release_parquets()
@@ -9695,22 +10087,11 @@ def render_loader(source: str) -> Optional[LoadedTable]:
 
         source_assets = [asset for asset in release_assets if asset.get("source") == source]
         if not source_assets:
-            st.error(f"Não encontrei Parquets da base {source} na release {GITHUB_RELEASE_TAG}.")
+            st.error(f"Não encontrei Parquets da base {source} nos bancos hospedados no github.")
             return None
 
         max_files = perf_int("perf_max_parquet_files", DEFAULT_MAX_PARQUET_FILES_PER_LOAD)
-        available_years = sorted({int(asset["year"]) for asset in source_assets if asset.get("year")})
-        selected_years = st.multiselect(
-            "Filtrar anos disponíveis antes de escolher arquivos",
-            options=available_years,
-            default=[],
-            key=f"github_release_year_filter_{source}",
-            help="Use este filtro para trabalhar por janelas menores em vez de carregar toda a série histórica.",
-        )
-        visible_assets = [
-            asset for asset in source_assets
-            if not selected_years or int(asset.get("year") or -1) in selected_years
-        ]
+        visible_assets = source_assets
 
         label_to_asset = {github_asset_label(asset): asset for asset in visible_assets}
         name_to_asset = {str(asset.get("name") or ""): asset for asset in source_assets}
@@ -9785,39 +10166,21 @@ def render_loader(source: str) -> Optional[LoadedTable]:
             st.write("\n".join(f"- {name}" for name in loaded_names))
 
         try:
-            with st.spinner(f"Preparando {len(selected_assets)} parquet(s) selecionado(s) da release {GITHUB_RELEASE_TAG}..."):
+            with st.spinner(f"Preparando {len(selected_assets)} parquet(s) selecionado(s) dos bancos hospedados no github..."):
                 paths = [materialize_github_release_asset(asset) for asset in selected_assets]
         except Exception as exc:
-            st.error(f"Não consegui baixar os Parquets selecionados da release: {exc}")
-            st.info("Como alternativa, use Upload Parquet ou Parquet local/glob.")
+            st.error(f"Não consegui baixar os Parquets selecionados dos bancos hospedados no github: {exc}")
+            st.info("Como alternativa, use Upload Parquet.")
             return None
 
-        st.success(f"{github_selection_summary(selected_assets)} carregado(s) da release {GITHUB_RELEASE_TAG}.")
+        st.success(f"{github_selection_summary(selected_assets)} carregado(s) dos bancos hospedados no github.")
         return LoadedTable(
             source=source,
             kind="parquet",
             parquet_paths=paths,
-            ref_sql=parquet_ref(paths),
-            label=f"GitHub {GITHUB_RELEASE_TAG}: {github_selection_summary(selected_assets)}",
+            ref_sql=parquet_object_name(source, paths),
+            label=f"Bancos hospedados no github: {github_selection_summary(selected_assets)}",
         )
-
-    if mode == "DuckDB local":
-        default_path = first_existing_path(cfg.default_db)
-        path = st.text_input("Caminho do DuckDB", value=default_path, key=f"duckdb_path_{source}")
-        if not path or not Path(path).exists():
-            st.warning("Informe um caminho existente para o arquivo .duckdb ou use upload.")
-            return None
-        try:
-            tables = list_duckdb_tables(path)
-        except Exception as exc:
-            st.error(f"Não consegui abrir o DuckDB: {exc}")
-            return None
-        if not tables:
-            st.error("O arquivo DuckDB não contém tabelas visíveis.")
-            return None
-        default_idx = tables.index(cfg.default_table) if cfg.default_table in tables else 0
-        table_name = st.selectbox("Tabela", options=tables, index=default_idx, key=f"duckdb_table_{source}")
-        return LoadedTable(source=source, kind="duckdb", db_path=path, table_name=table_name, ref_sql=qident(table_name), label=f"{Path(path).name}:{table_name}")
 
     if mode == "Upload DuckDB":
         upload = st.file_uploader("Envie um arquivo .duckdb", type=["duckdb"], key=f"upload_duckdb_{source}")
@@ -9834,26 +10197,6 @@ def render_loader(source: str) -> Optional[LoadedTable]:
         table_name = st.selectbox("Tabela", options=tables, index=default_idx, key=f"upload_duckdb_table_{source}")
         return LoadedTable(source=source, kind="duckdb", db_path=path, table_name=table_name, ref_sql=qident(table_name), label=f"upload:{upload.name}:{table_name}")
 
-    if mode == "Parquet local/glob":
-        glob_value = st.text_input(
-            "Caminho/glob dos Parquets",
-            value="",
-            placeholder="Ex.: dados/sinan/*.parquet",
-            key=f"parquet_glob_{source}",
-        )
-        paths = sorted(glob.glob(glob_value)) if glob_value else []
-        if not paths:
-            st.info("Informe um glob local que encontre ao menos um arquivo .parquet.")
-            return None
-        max_files = perf_int("perf_max_parquet_files", DEFAULT_MAX_PARQUET_FILES_PER_LOAD)
-        if len(paths) > max_files:
-            st.error(
-                f"O glob encontrou {len(paths)} Parquets, acima do limite atual de {max_files}. "
-                "Use um glob mais específico, filtre anos ou aumente o limite em Desempenho e memória."
-            )
-            return None
-        return LoadedTable(source=source, kind="parquet", parquet_paths=paths, ref_sql=parquet_ref(paths), label=f"{len(paths)} parquet(s)")
-
     uploads = st.file_uploader("Envie um ou mais Parquets", type=["parquet"], accept_multiple_files=True, key=f"upload_parquet_{source}")
     if not uploads:
         st.info("Envie Parquet(s) para continuar.")
@@ -9866,7 +10209,7 @@ def render_loader(source: str) -> Optional[LoadedTable]:
         )
         return None
     paths = [materialize_upload(up, f"{source.lower()}_parquet") for up in uploads]
-    return LoadedTable(source=source, kind="parquet", parquet_paths=paths, ref_sql=parquet_ref(paths), label=f"{len(paths)} parquet(s) enviados")
+    return LoadedTable(source=source, kind="parquet", parquet_paths=paths, ref_sql=parquet_object_name(source, paths), label=f"{len(paths)} parquet(s) enviados")
 
 
 def render_column_config(source: str, columns: Sequence[str]) -> ColumnSelection:
@@ -10095,12 +10438,12 @@ def render_temporal_tab(table: LoadedTable, source: str, graph_where: str, exprs
         st.info("Sem dados para a série temporal com os filtros atuais.")
     elif cat_options[cat_label]:
         fig = px.line(ts, x="periodo", y="n", color="categoria", markers=True, title="Série temporal estratificada", labels={"periodo": "Período", "n": "Registros", "categoria": cat_label})
-        st.plotly_chart(fig, width="stretch")
+        render_plotly_chart(fig)
         render_interval_total(ts, value_col="n", by_col="categoria")
         download_button(ts, f"{source.lower()}_serie_temporal_estratificada.csv")
     else:
         fig = px.line(ts, x="periodo", y="n", markers=True, title="Série temporal", labels={"periodo": "Período", "n": "Registros"})
-        st.plotly_chart(fig, width="stretch")
+        render_plotly_chart(fig)
         render_interval_total(ts, value_col="n")
         download_button(ts, f"{source.lower()}_serie_temporal.csv")
 
@@ -10119,13 +10462,133 @@ def render_temporal_tab(table: LoadedTable, source: str, graph_where: str, exprs
             )
         )
         fig.update_layout(title="Sazonalidade: ano × mês", xaxis_title="Mês", yaxis_title="Ano")
-        st.plotly_chart(fig, width="stretch")
+        render_plotly_chart(fig)
         render_interval_total(heat, value_col="n")
         download_button(heat, f"{source.lower()}_heatmap_ano_mes.csv", "Baixar dados do heatmap")
 
 
-def render_indicators_tab(table: LoadedTable, source: str, base_where: str, exprs: Dict[str, Optional[str]]) -> None:
-    st.markdown("Os indicadores desta aba usam os filtros-base, mas **não** aplicam a definição escolhida para os gráficos exploratórios. Isso evita esconder confirmados/descartados dentro de uma mesma tabela.")
+
+def render_sinan_lcr_indicators(table: LoadedTable, exprs: Dict[str, Optional[str]], graph_where: str) -> None:
+    """Renderiza punção e parâmetros do LCR no bloco de principais indicadores."""
+    def br_int(value: object) -> str:
+        if pd.isna(value):
+            return "—"
+        return f"{int(value):,}".replace(",", ".")
+
+    def br_pct(value: object) -> str:
+        if pd.isna(value):
+            return "—"
+        return f"{float(value):.1f}%".replace(".", ",")
+
+    def add_text(df: pd.DataFrame, pct_col: str = "pct") -> pd.DataFrame:
+        out = df.copy()
+        out["texto"] = [f"{br_int(n)} ({br_pct(pct)})" for n, pct in zip(out["n"], out[pct_col])]
+        return out
+
+    st.markdown("### Punção laboratorial e exame quimiocitológico do líquor")
+    st.caption(
+        "Estes gráficos usam o recorte exploratório atual. "
+        f"Material analisado no bloco quimiocitológico: {SINAN_QUIMIO_MATERIAL}."
+    )
+
+    for label, expr in [
+        ("Punção Laboratorial", exprs.get("puncao_label")),
+        ("Exame Quimiocitológico do líquor (LCR)", exprs.get("quimio_label")),
+    ]:
+        if expr:
+            df = query_category(table, expr, graph_where, top_n=40)
+            if not df.empty:
+                df = add_text(df)
+                st.markdown(f"**{label}**")
+                fig = px.bar(
+                    df,
+                    x="n",
+                    y="categoria",
+                    orientation="h",
+                    text="texto",
+                    labels={"categoria": label, "n": "Registros", "pct": "%"},
+                    hover_data={"texto": False, "pct": ":.2f"},
+                )
+                fig.update_layout(yaxis={"categoryorder": "total ascending"})
+                render_plotly_chart(fig)
+                render_interval_total(df, value_col="n")
+                copyable_dataframe(df, width="stretch", hide_index=True)
+
+    with st.expander("Como os parâmetros do LCR costumam se comportar por etiologia"):
+        render_quimio_interpretation()
+
+    quimio_summary = query_sinan_quimio_summary(table, exprs, graph_where)
+    if quimio_summary.empty:
+        st.info(
+            "Para gerar o resumo do Exame Quimiocitológico do líquor (LCR), os campos laboratoriais do SINAN precisam existir "
+            "e ser detectados automaticamente, como LAB_GLICO, LAB_LEUCO, LAB_NEUTRO e LAB_PROT."
+        )
+        return
+
+    for key, titulo in [("glico", "Glicose"), ("prot", "Proteínas"), ("neutro", "Neutrófilos"), ("leuco", "Leucócitos")]:
+        expr = exprs.get(f"lab_{key}")
+        if not expr:
+            st.info(f"Para gerar a distribuição de {titulo}, o campo correspondente precisa existir no SINAN e ser detectado automaticamente.")
+            continue
+        dist = query_sinan_numeric_distribution(table, expr, graph_where)
+        if dist.empty:
+            st.info(f"Não há valores numéricos válidos para {titulo} no recorte atual.")
+            continue
+        dist = add_text(dist)
+        st.markdown(f"**Distribuição — {titulo}**")
+        fig_dist = px.bar(
+            dist,
+            x="faixa",
+            y="n",
+            text="texto",
+            title=f"SINAN: distribuição de {titulo}",
+            labels={"faixa": titulo, "n": "Registros", "pct": "%"},
+            hover_data={"texto": False, "pct": ":.2f", "denominador": True, "faixa_inicio": ":.2f", "faixa_fim": ":.2f"},
+        )
+        render_plotly_chart(fig_dist)
+        render_interval_total(dist, value_col="n")
+        copyable_dataframe(dist, width="stretch", hide_index=True)
+        download_button(dist, f"sinan_quimiocitologico_distribuicao_{safe_filename(titulo)}.csv")
+
+    st.markdown("**Exame Quimiocitológico do líquor (LCR) — valores médios dos parâmetros**")
+    resumo_plot = quimio_summary[quimio_summary["n_valido"] > 0].copy()
+    if not resumo_plot.empty:
+        resumo_plot["texto"] = [
+            f"média {float(media):.1f}".replace(".", ",") if pd.notna(media) else "—"
+            for media in resumo_plot["media"]
+        ]
+        fig_quimio = px.bar(
+            resumo_plot,
+            x="parametro",
+            y="media",
+            text="texto",
+            title="SINAN: média dos parâmetros do exame quimiocitológico do líquor (LCR)",
+            labels={
+                "parametro": "Parâmetro",
+                "material_analisado": "Material analisado",
+                "media": "Média",
+                "n_valido": "Registros válidos",
+            },
+            hover_data={
+                "texto": False,
+                "material_analisado": True,
+                "n_valido": True,
+                "pct_preenchido": ":.2f",
+                "minimo": ":.2f",
+                "q1": ":.2f",
+                "mediana": ":.2f",
+                "q3": ":.2f",
+                "maximo": ":.2f",
+            },
+        )
+        render_plotly_chart(fig_quimio)
+        render_interval_total(resumo_plot, value_col="n_valido", by_col="parametro", value_label="registros válidos")
+    copyable_dataframe(quimio_summary, width="stretch", hide_index=True)
+    download_button(quimio_summary, "sinan_quimiocitologico_liquor_resumo_parametros.csv")
+
+
+def render_indicators_tab(table: LoadedTable, source: str, base_where: str, graph_where: str, exprs: Dict[str, Optional[str]]) -> None:
+    st.markdown("Os principais indicadores epidemiológicos usam os filtros-base. Os blocos laboratoriais movidos para esta área usam o recorte exploratório atual para preservar a leitura original dos gráficos.")
 
     def br_int(value: object) -> str:
         if pd.isna(value):
@@ -10187,7 +10650,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                     hover_data={"texto": False, "pct": ":.2f", "total_ano": True},
                 )
                 fig_evol_confirmados.update_layout(barmode="stack")
-                st.plotly_chart(fig_evol_confirmados, width="stretch")
+                render_plotly_chart(fig_evol_confirmados)
                 render_interval_total(evol_confirmados, value_col="n", by_col="categoria")
                 copyable_dataframe(evol_confirmados, width="stretch", hide_index=True)
                 download_button(evol_confirmados, "sinan_evolucao_confirmados.csv")
@@ -10225,7 +10688,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
             hover_data={"texto": False, "pct": ":.2f", "denominador_pct": True},
         )
         fig.update_traces(textposition="top center")
-        st.plotly_chart(fig, width="stretch")
+        render_plotly_chart(fig)
         render_interval_total(count_long, value_col="n", by_col="indicador")
 
         prop_specs = [
@@ -10261,9 +10724,10 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
             title="SINAN: proporções, inconclusivos, ignorados e letalidade (%)",
             labels={"ano": "Ano", "pct": "%", "indicador": "Indicador", "n": "Valor absoluto"},
             hover_data={"texto": False, "n": True, "denominador": True, "denominador_label": True},
+            color_discrete_map={LETHALITY_LABEL: LETHALITY_RED},
         )
         fig2.update_traces(textposition="top center")
-        st.plotly_chart(fig2, width="stretch")
+        render_plotly_chart(fig2)
         render_interval_total(prop_long, value_col="n", by_col="indicador", denominator_col="denominador", denominator_label="registros do denominador")
 
         assistencia = query_sinan_hospitalization_internment(table, exprs, base_where, hospital_col)
@@ -10284,7 +10748,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                 hover_data={"texto": False, "n": True, "denominador": True},
                 category_orders={"grupo_caso": grupo_hosp_order},
             )
-            st.plotly_chart(fig_assistencia, width="stretch")
+            render_plotly_chart(fig_assistencia)
             render_interval_total(assistencia, value_col="n", by_col="grupo_caso", denominator_col="denominador", denominator_label="registros do grupo")
             copyable_dataframe(assistencia.drop(columns=["ordem_grupo"], errors="ignore"), width="stretch", hide_index=True)
             download_button(assistencia.drop(columns=["ordem_grupo"], errors="ignore"), "sinan_hospitalizacao_suspeitos_confirmados_descartados.csv")
@@ -10311,9 +10775,10 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                 title="Letalidade por grupo etiológico — denominador: casos confirmados",
                 labels={"letalidade_pct": "Óbitos por meningite / casos confirmados (%)", "grupo_etiologico": "Grupo etiológico", "denominador_letalidade": "Casos confirmados do grupo"},
                 hover_data={"obitos_meningite": True, "denominador_letalidade": True},
+                color_discrete_sequence=[DEATH_RED],
             )
             fig3.update_layout(yaxis={"categoryorder": "total ascending"})
-            st.plotly_chart(fig3, width="stretch")
+            render_plotly_chart(fig3)
             render_interval_total(etio, value_col="obitos_meningite", denominator_col="confirmados", value_label="óbitos por meningite", denominator_label="casos confirmados")
             download_button(etio, "sinan_letalidade_por_etiologia.csv")
 
@@ -10344,7 +10809,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
             )
             fig4.update_layout(barmode="stack")
             fig4.update_xaxes(type="category")
-            st.plotly_chart(fig4, width="stretch")
+            render_plotly_chart(fig4)
             render_interval_total(by_year, value_col="confirmados", by_col="grupo_etiologico")
             copyable_dataframe(by_year, width="stretch", hide_index=True)
             download_button(by_year, "sinan_confirmados_por_cid10_convertido_ano.csv")
@@ -10372,7 +10837,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                     hover_data={"texto": False, "sintoma_sim": True, "confirmados": True, "sintoma_nao": True, "sintoma_ignorado": True},
                 )
                 fig_sintoma.update_traces(textposition="top center")
-                st.plotly_chart(fig_sintoma, width="stretch")
+                render_plotly_chart(fig_sintoma)
                 render_interval_total(sintomas_sel, value_col="sintoma_sim", denominator_col="confirmados", value_label="confirmados com sintoma", denominator_label="casos confirmados")
 
                 sintomas_resumo = (
@@ -10398,7 +10863,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                     labels={"pct_sintoma_confirmados": "% dos confirmados", "sintoma": "Sinal/sintoma"},
                     hover_data={"texto": False, "sintoma_sim": True, "confirmados": True, "sintoma_nao": True, "sintoma_ignorado": True},
                 )
-                st.plotly_chart(fig_sintomas_resumo, width="stretch")
+                render_plotly_chart(fig_sintomas_resumo)
                 render_interval_total(sintomas_resumo, value_col="sintoma_sim", by_col="sintoma")
                 copyable_dataframe(sintomas, width="stretch", hide_index=True)
                 download_button(sintomas, "sinan_prevalencia_sintomas_confirmados.csv")
@@ -10421,7 +10886,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                 hover_data={"texto_comunicantes": False, "registros": True, "registros_com_comunicantes": True, "media_comunicantes": True, "pct_comunicantes_ano": ":.2f"},
             )
             fig_comunicantes.update_layout(barmode="stack")
-            st.plotly_chart(fig_comunicantes, width="stretch")
+            render_plotly_chart(fig_comunicantes)
             render_interval_total(comunicantes, value_col="comunicantes_total", by_col="quimioprofilaxia", value_label="comunicantes")
             copyable_dataframe(comunicantes, width="stretch", hide_index=True)
             download_button(comunicantes, "sinan_comunicantes_quimioprofilaxia.csv")
@@ -10445,12 +10910,14 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                 hover_data={"texto": False, "vacinados_sim": True, "vacinados_nao": True, "vacinacao_ignorada": True, "denominador": True},
             )
             fig_vacinacao.update_xaxes(tickangle=-30)
-            st.plotly_chart(fig_vacinacao, width="stretch")
+            render_plotly_chart(fig_vacinacao)
             render_interval_total(vacinacao, value_col="vacinados_sim", by_col="vacina", value_label="vacinados com informação = Sim")
             copyable_dataframe(vacinacao, width="stretch", hide_index=True)
             download_button(vacinacao, "sinan_vacinacao_confirmados_descartados_inconclusivos.csv")
         else:
             st.info("Para gerar o gráfico de vacinação, CLASSI_FIN e campos ANT_* de vacinação precisam existir no SINAN.")
+
+        render_sinan_lcr_indicators(table, exprs, graph_where)
 
         return
 
@@ -10497,7 +10964,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                 hover_data={"texto": False, "pct": ":.2f", "denominador": True},
             )
             fig.update_traces(textposition="top center")
-            st.plotly_chart(fig, width="stretch")
+            render_plotly_chart(fig)
             render_interval_total(sim_cid_long, value_col="n", by_col="definicao")
 
         def render_sim_cycle_chart(
@@ -10528,7 +10995,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                 labels={"ano": "Ano", "n": "Óbitos", "categoria": field_label, "pct": "% no ano"},
                 hover_data={"texto": False, "pct": ":.2f", "total_ano": True},
             )
-            st.plotly_chart(fig_cycle, width="stretch")
+            render_plotly_chart(fig_cycle)
             render_interval_total(df, value_col="n", by_col="categoria")
             copyable_dataframe(df, width="stretch", hide_index=True)
             download_button(df, filename)
@@ -10637,7 +11104,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
             hover_data={"texto": False, "pct": ":.2f", "denominador": True},
         )
         fig.update_traces(textposition="top center")
-        st.plotly_chart(fig, width="stretch")
+        render_plotly_chart(fig)
         render_interval_total(ciha_count_long, value_col="n", by_col="indicador")
 
     if exprs.get("dt") and exprs.get("modalidade_label"):
@@ -10656,7 +11123,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                 hover_data={"texto": False, "pct": ":.2f", "total_ano": True},
             )
             fig_modalidade.update_layout(barmode="stack")
-            st.plotly_chart(fig_modalidade, width="stretch")
+            render_plotly_chart(fig_modalidade)
             render_interval_total(modalidade, value_col="n", by_col="categoria")
             copyable_dataframe(modalidade, width="stretch", hide_index=True)
             download_button(modalidade, "ciha_modalidade_hospitalar_ambulatorial.csv")
@@ -10682,7 +11149,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
                 hover_data={"texto": False, "pct": ":.2f", "denominador": True},
             )
             fig_proc.update_layout(yaxis={"categoryorder": "array", "categoryarray": procedimentos["categoria"].tolist()[::-1]})
-            st.plotly_chart(fig_proc, width="stretch")
+            render_plotly_chart(fig_proc)
             render_interval_total(procedimentos, value_col="n")
             copyable_dataframe(procedimentos, width="stretch", hide_index=True)
             download_button(procedimentos, "ciha_procedimentos_quantidade.csv")
@@ -10704,7 +11171,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, expr
             labels={"faixa_dias_perm": "Dias de permanência", "n": "Atendimentos", "pct": "%"},
             hover_data={"texto": False, "pct": ":.2f", "denominador": True},
         )
-        st.plotly_chart(fig_dias, width="stretch")
+        render_plotly_chart(fig_dias)
         render_interval_total(dias_dist, value_col="n")
         copyable_dataframe(dias_dist, width="stretch", hide_index=True)
         download_button(dias_dist, "ciha_dias_permanencia_distribuicao.csv")
@@ -10747,7 +11214,7 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
                 hover_data={"texto": False, "pct": ":.2f", "cids_encontrados": True, "campos_origem": True},
             )
             fig.update_layout(yaxis={"categoryorder": "total ascending"})
-            st.plotly_chart(fig, width="stretch")
+            render_plotly_chart(fig)
             render_interval_total(cid_dist, value_col="n")
             copyable_dataframe(cid_dist, width="stretch", hide_index=True)
             download_button(cid_dist, f"{source.lower()}_cid10_distribuicao.csv")
@@ -10782,7 +11249,7 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
                         },
                     )
                     fig_conv.update_layout(yaxis={"categoryorder": "total ascending"})
-                    st.plotly_chart(fig_conv, width="stretch")
+                    render_plotly_chart(fig_conv)
                     render_interval_total(conv_adequacy_plot, value_col="n")
                     st.caption(
                         "Gráfico agregado pelo CID-10 adequado final: CID-10 convertidos somam no destino "
@@ -10822,7 +11289,7 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
                     hover_data={"texto": False, "pct": ":.2f", "denominador": True},
                 )
                 fig_g01_g02.update_layout(yaxis={"categoryorder": "total ascending"})
-                st.plotly_chart(fig_g01_g02, width="stretch")
+                render_plotly_chart(fig_g01_g02)
                 render_interval_total(g01_g02, value_col="n")
                 copyable_dataframe(g01_g02, width="stretch", hide_index=True)
                 download_button(g01_g02, f"{source.lower()}_verificacao_g01_g02.csv")
@@ -10857,7 +11324,7 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
                             hover_data={"texto": False, "pct": ":.2f", "cids_encontrados": True, "campos_origem": True},
                         )
                         fig_death.update_layout(yaxis={"categoryorder": "total ascending"})
-                        st.plotly_chart(fig_death, width="stretch")
+                        render_plotly_chart(fig_death)
                         render_interval_total(death_cid, value_col="n", value_label="óbitos CIHA")
                         copyable_dataframe(death_cid, width="stretch", hide_index=True)
                         download_button(death_cid, "ciha_obitos_cid10_distribuicao.csv")
@@ -10869,10 +11336,6 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
         "Por isso, esta aba prioriza CON_DIAGES e os campos complementares CLA_ME_BAC, CLA_ME_ASS e CLA_ME_ETI. "
         "CON_DIAGES=05 deixou de ser convertido automaticamente para G04.2; ele é refinado como G00 ou G01 quando há informação suficiente."
     )
-    st.caption(
-        f"No bloco do exame quimiocitológico, o material analisado é: {SINAN_QUIMIO_MATERIAL}."
-    )
-
     # O gráfico CON_DIAGES detalhado foi removido porque o Grupo etiológico SINAN já é derivado do mesmo campo,
     # com agrupamento mais adequado para leitura epidemiológica.
     for label, expr in [
@@ -10885,7 +11348,7 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
                 st.markdown(f"**{label}**")
                 fig = px.bar(df, x="n", y="categoria", orientation="h", text="pct", labels={"categoria": label, "n": "Registros"})
                 fig.update_layout(yaxis={"categoryorder": "total ascending"})
-                st.plotly_chart(fig, width="stretch")
+                render_plotly_chart(fig)
                 render_interval_total(df, value_col="n")
                 copyable_dataframe(df, width="stretch", hide_index=True)
 
@@ -10895,7 +11358,7 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
                 conv_yes = conv[conv["incluido_comparacao"].eq("Sim")].copy()
                 conv_no = conv[~conv["incluido_comparacao"].eq("Sim")].copy()
 
-                st.markdown("**CID-10 / classificação — conversão do grupo etiológico SINAN**")
+                st.markdown("**Análise conforme CID-10 — conversão do grupo etiológico SINAN**")
                 if conv_yes.empty:
                     st.warning("Não há registros com CON_DIAGES conversível pela regra definida.")
                 else:
@@ -10911,7 +11374,7 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
                         hover_data={"texto": False, "pct": ":.2f", "denominador": True, "grupos_sinan": True, "conclusoes_sinan": True},
                     )
                     fig_conv.update_layout(yaxis={"categoryorder": "total ascending"})
-                    st.plotly_chart(fig_conv, width="stretch")
+                    render_plotly_chart(fig_conv)
                     render_interval_total(conv_yes, value_col="n")
                     display_cols = [
                         c for c in [
@@ -10962,7 +11425,7 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
                         hover_data={"texto": False, "pct": ":.2f", "denominador": True, "conclusoes_sinan": True, "bacterias_sinan": True},
                     )
                     fig_g01.update_layout(yaxis={"categoryorder": "total ascending"})
-                    st.plotly_chart(fig_g01, width="stretch")
+                    render_plotly_chart(fig_g01)
                     render_interval_total(g01_base, value_col="n")
                     copyable_dataframe(g01_base, width="stretch", hide_index=True)
                     download_button(g01_base, "sinan_g01_doenca_base_provavel.csv")
@@ -10971,8 +11434,6 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
     for label, expr in [
         ("EVOLUCAO", exprs.get("evol_label")),
         ("Critério de confirmação para classificação do caso", exprs.get("criterio_label")),
-        ("Punção Laboratorial", exprs.get("puncao_label")),
-        ("Exame Quimiocitológico do líquor (LCR)", exprs.get("quimio_label")),
     ]:
         if expr:
             df = query_category(table, expr, graph_where, top_n=40)
@@ -10989,81 +11450,10 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
                     hover_data={"texto": False, "pct": ":.2f"},
                 )
                 fig.update_layout(yaxis={"categoryorder": "total ascending"})
-                st.plotly_chart(fig, width="stretch")
+                render_plotly_chart(fig)
                 render_interval_total(df, value_col="n")
                 copyable_dataframe(df, width="stretch", hide_index=True)
 
-    with st.expander("Como os parâmetros do LCR costumam se comportar por etiologia"):
-        render_quimio_interpretation()
-
-    quimio_summary = query_sinan_quimio_summary(table, exprs, graph_where)
-    if quimio_summary.empty:
-        st.info(
-            "Para gerar o resumo do Exame Quimiocitológico do líquor (LCR), os campos laboratoriais do SINAN precisam existir "
-            "e ser detectados automaticamente, como LAB_GLICO, LAB_LEUCO, LAB_NEUTRO e LAB_PROT."
-        )
-    else:
-        for key, titulo in [("glico", "Glicose"), ("prot", "Proteínas"), ("leuco", "Leucócitos"), ("neutro", "Neutrófilos")]:
-            expr = exprs.get(f"lab_{key}")
-            if not expr:
-                st.info(f"Para gerar a distribuição de {titulo}, o campo correspondente precisa existir no SINAN e ser detectado automaticamente.")
-                continue
-            dist = query_sinan_numeric_distribution(table, expr, graph_where)
-            if dist.empty:
-                st.info(f"Não há valores numéricos válidos para {titulo} no recorte atual.")
-                continue
-            dist = add_text(dist)
-            st.markdown(f"**Distribuição — {titulo}**")
-            fig_dist = px.bar(
-                dist,
-                x="faixa",
-                y="n",
-                text="texto",
-                title=f"SINAN: distribuição de {titulo}",
-                labels={"faixa": titulo, "n": "Registros", "pct": "%"},
-                hover_data={"texto": False, "pct": ":.2f", "denominador": True, "faixa_inicio": ":.2f", "faixa_fim": ":.2f"},
-            )
-            st.plotly_chart(fig_dist, width="stretch")
-            render_interval_total(dist, value_col="n")
-            copyable_dataframe(dist, width="stretch", hide_index=True)
-            download_button(dist, f"sinan_quimiocitologico_distribuicao_{safe_filename(titulo)}.csv")
-
-        st.markdown("**Exame Quimiocitológico do líquor (LCR) — valores médios dos parâmetros**")
-        st.caption(f"Material analisado: {SINAN_QUIMIO_MATERIAL}.")
-        resumo_plot = quimio_summary[quimio_summary["n_valido"] > 0].copy()
-        if not resumo_plot.empty:
-            resumo_plot["texto"] = [
-                f"média {float(media):.1f}".replace(".", ",") if pd.notna(media) else "—"
-                for media in resumo_plot["media"]
-            ]
-            fig_quimio = px.bar(
-                resumo_plot,
-                x="parametro",
-                y="media",
-                text="texto",
-                title="SINAN: média dos parâmetros do exame quimiocitológico do líquor (LCR)",
-                labels={
-                    "parametro": "Parâmetro",
-                    "material_analisado": "Material analisado",
-                    "media": "Média",
-                    "n_valido": "Registros válidos",
-                },
-                hover_data={
-                    "texto": False,
-                    "material_analisado": True,
-                    "n_valido": True,
-                    "pct_preenchido": ":.2f",
-                    "minimo": ":.2f",
-                    "q1": ":.2f",
-                    "mediana": ":.2f",
-                    "q3": ":.2f",
-                    "maximo": ":.2f",
-                },
-            )
-            st.plotly_chart(fig_quimio, width="stretch")
-            render_interval_total(resumo_plot, value_col="n_valido", by_col="parametro", value_label="registros válidos")
-        copyable_dataframe(quimio_summary, width="stretch", hide_index=True)
-        download_button(quimio_summary, "sinan_quimiocitologico_liquor_resumo_parametros.csv")
 
 
 def render_demography_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dict[str, Optional[str]], base_where: Optional[str] = None) -> None:
@@ -11102,7 +11492,7 @@ def render_demography_tab(table: LoadedTable, source: str, graph_where: str, exp
                 hover_data={"texto": False, "pct": ":.2f", "denominador": True},
             )
             fig.update_traces(textposition="outside", cliponaxis=False)
-            st.plotly_chart(fig, width="stretch")
+            render_plotly_chart(fig)
             render_interval_total(age_df, value_col="n")
             download_button(age_df, f"{source.lower()}_idade.csv")
         sex = exprs.get("sex")
@@ -11113,7 +11503,7 @@ def render_demography_tab(table: LoadedTable, source: str, graph_where: str, exp
                 pyr["valor"] = np.where(pyr["sexo"].eq("Masculino"), -pyr["n"], pyr["n"])
                 fig = px.bar(pyr, x="valor", y="faixa", color="sexo", orientation="h", title="Pirâmide etária por sexo", labels={"valor": "Registros", "faixa": "Faixa etária"})
                 fig.update_layout(barmode="relative")
-                st.plotly_chart(fig, width="stretch")
+                render_plotly_chart(fig)
                 render_interval_total(pyr, value_col="n", by_col="sexo")
                 download_button(pyr, f"{source.lower()}_piramide.csv")
 
@@ -11161,7 +11551,7 @@ def render_demography_tab(table: LoadedTable, source: str, graph_where: str, exp
                 )
                 fig_edu.update_layout(yaxis={"categoryorder": "array", "categoryarray": categoria_order[::-1]})
                 st.caption("O gráfico exibe todas as categorias operacionais de escolaridade do SINAN; os percentuais usam o total de casos confirmados como denominador comum.")
-                st.plotly_chart(fig_edu, width="stretch")
+                render_plotly_chart(fig_edu)
                 render_interval_total(edu_df, value_col="n", by_col="grupo")
                 edu_out = edu_df.drop(columns=["ordem_escolaridade", "ordem_grupo"], errors="ignore")
                 copyable_dataframe(edu_out, width="stretch", hide_index=True)
@@ -11191,7 +11581,7 @@ def render_demography_tab(table: LoadedTable, source: str, graph_where: str, exp
                 )
                 fig_edu.update_layout(yaxis={"categoryorder": "array", "categoryarray": categoria_order[::-1]})
                 st.caption("O gráfico exibe todas as categorias operacionais de escolaridade detectadas para o campo do SIM; os percentuais usam o total de registros filtrados como denominador.")
-                st.plotly_chart(fig_edu, width="stretch")
+                render_plotly_chart(fig_edu)
                 render_interval_total(edu_df, value_col="n")
                 edu_out = edu_df.drop(columns=["ordem_categoria"], errors="ignore")
                 copyable_dataframe(edu_out, width="stretch", hide_index=True)
@@ -11240,7 +11630,7 @@ def render_demography_tab(table: LoadedTable, source: str, graph_where: str, exp
                     fig.update_layout(yaxis={"categoryorder": "array", "categoryarray": df["categoria"].tolist()[::-1]})
                 else:
                     fig.update_layout(yaxis={"categoryorder": "total ascending"})
-                st.plotly_chart(fig, width="stretch")
+                render_plotly_chart(fig)
                 render_interval_total(df, value_col="n")
                 copyable_dataframe(df, width="stretch", hide_index=True)
                 download_button(df, filename)
@@ -11328,7 +11718,7 @@ def render_quality_tab(table: LoadedTable, source: str, base_where: str, exprs: 
         )
         fig.update_layout(yaxis={"categoryorder": "total ascending"})
         fig.update_traces(textposition="outside", cliponaxis=False)
-        st.plotly_chart(fig, width="stretch")
+        render_plotly_chart(fig)
         st.caption("Total no intervalo filtrado: " + format_int_br(pd.to_numeric(miss["total"], errors="coerce").max()) + " registros analisados; faltantes são contados por campo.")
         copyable_dataframe(miss[["campo", "faltantes", "total", "pct_faltante", "texto"]], width="stretch", hide_index=True)
         download_button(miss.drop(columns=["texto"], errors="ignore"), f"{source.lower()}_campos_importantes_nao_preenchidos.csv")
@@ -11361,7 +11751,7 @@ def render_quality_tab(table: LoadedTable, source: str, base_where: str, exprs: 
             hover_data={"texto": False, "faltantes": True, "total": True, "pct_faltante": ":.2f"},
         )
         fig.update_traces(textposition="top center")
-        st.plotly_chart(fig, width="stretch")
+        render_plotly_chart(fig)
         render_interval_total(filtered, value_col="faltantes", by_col="campo", value_label="registros não preenchidos")
         copyable_dataframe(filtered[["ano", "campo", "faltantes", "total", "pct_faltante", "texto"]], width="stretch", hide_index=True)
         download_button(by_year.drop(columns=["texto"], errors="ignore"), f"{source.lower()}_campos_importantes_nao_preenchidos_por_ano.csv")
@@ -11443,27 +11833,30 @@ def render_source(source: str) -> Optional[Dict[str, object]]:
     render_kpis(table, source, base_where, graph_where, exprs)
 
     analysis_sections = [
-        "Indicadores",
+        "Principais indicadores epidemiológicos",
         "Temporal",
-        "CID-10 / classificação",
+        "Análise conforme CID-10",
         "Demografia e território",
         "Campos importantes não preenchidos",
         "Prévia",
         "SQL Lab",
     ]
+    analysis_section_key = f"analysis_section_{source}"
+    if st.session_state.get(analysis_section_key) not in (None, *analysis_sections):
+        st.session_state.pop(analysis_section_key, None)
     selected_section = st.radio(
         "Área de análise",
         analysis_sections,
         horizontal=True,
-        key=f"analysis_section_{source}",
+        key=analysis_section_key,
         help="Somente a área selecionada é calculada nesta execução para reduzir memória e tempo de rerun.",
     )
 
-    if selected_section == "Indicadores":
-        render_indicators_tab(table, source, base_where, exprs)
+    if selected_section == "Principais indicadores epidemiológicos":
+        render_indicators_tab(table, source, base_where, graph_where, exprs)
     elif selected_section == "Temporal":
         render_temporal_tab(table, source, graph_where, exprs)
-    elif selected_section == "CID-10 / classificação":
+    elif selected_section == "Análise conforme CID-10":
         render_cid_tab(table, source, graph_where, exprs)
     elif selected_section == "Demografia e território":
         render_demography_tab(table, source, graph_where, exprs, base_where=base_where)
@@ -11529,7 +11922,7 @@ def render_source(source: str) -> Optional[Dict[str, object]]:
 
 
 def render_comparison(loaded: Sequence[Dict[str, object]]) -> None:
-    st.markdown("### Comparação entre bases")
+    st.markdown("### Comparação de bancos de dados")
     available = [x for x in loaded if x and x.get("exprs", {}).get("dt")]
     if len(available) < 2:
         st.info("Carregue ao menos duas bases com data detectada para comparar séries.")
@@ -11614,8 +12007,8 @@ def render_comparison(loaded: Sequence[Dict[str, object]]) -> None:
             if not nonzero.empty:
                 comp.loc[idx, "valor"] = comp.loc[idx, "valor"] / nonzero.iloc[0] * 100
 
-    fig = px.line(comp, x="periodo", y="valor", color="serie", markers=True, title="Comparação de tendências", labels={"valor": "Índice" if normalize else "Registros", "periodo": "Período", "serie": "Série"})
-    st.plotly_chart(fig, width="stretch")
+    fig = px.line(comp, x="periodo", y="valor", color="serie", markers=True, title="Comparação de bancos de dados — tendências", labels={"valor": "Índice" if normalize else "Registros", "periodo": "Período", "serie": "Série"})
+    render_plotly_chart(fig)
     if not normalize:
         render_interval_total(comp, value_col="valor", by_col="serie")
     if comparison_conversion_notes:
@@ -11634,8 +12027,8 @@ def render_methodology() -> None:
     st.markdown("### Como usar este app para investigação epidemiológica")
     st.markdown(
         """
-        1. Comece pela aba **Indicadores** do SINAN para separar notificações, confirmados, descartados e óbitos.
-        2. Use **CID-10 / classificação** para comparar o CID bruto com a classificação específica. No SINAN, dê prioridade a `CON_DIAGES`.
+        1. Comece pela aba **Principais indicadores epidemiológicos** do SINAN para separar notificações, confirmados, descartados e óbitos.
+        2. Use **Análise conforme CID-10** para comparar o CID bruto com a classificação específica. No SINAN, dê prioridade a `CON_DIAGES`.
         3. Use **Temporal** para verificar queda, recuperação e sazonalidade.
         4. Use **Demografia e território** para levantar hipóteses por idade, sexo, residência e atendimento.
         5. Use **Prévia** para inspecionar casos filtrados e exportar a planilha completa quando necessário.
@@ -11668,29 +12061,23 @@ def render_methodology() -> None:
 
 
 def main() -> None:
+    render_app_css()
     st.title("Painel epidemiológico de meningite — SINAN, SIM e CIHA")
-    st.caption(f"Versão {APP_VERSION}. Lê DuckDB ou Parquet e mantém regras analíticas explícitas.")
+    st.caption(f"Versão {APP_VERSION}. Lê upload de DuckDB, upload de Parquet ou bancos hospedados no github em Parquet e mantém regras analíticas explícitas.")
 
     with st.sidebar:
-        st.header("Orientação")
-        st.write(
-            "Escolha uma única seção por vez. Isso evita que Streamlit execute todas as abas e carregue várias bases "
-            "simultaneamente a cada rerun."
-        )
-        st.write(
-            "Em **GitHub Release1 (Parquets)**, filtre anos, selecione poucos arquivos e clique em carregar. "
-            "Aumente os limites apenas se o ambiente tiver memória suficiente."
-        )
         render_performance_controls()
+        main_sections = ["SINAN", "SIM", "CIHA", "Comparação de bancos de dados"]
+        main_section_key = "main_section"
+        if st.session_state.get(main_section_key) not in (None, *main_sections):
+            st.session_state.pop(main_section_key, None)
         section = st.radio(
             "Seção",
-            ["Metodologia", "SINAN", "SIM", "CIHA", "Comparação"],
-            key="main_section",
+            main_sections,
+            key=main_section_key,
         )
 
-    if section == "Metodologia":
-        render_methodology()
-    elif section in {"SINAN", "SIM", "CIHA"}:
+    if section in {"SINAN", "SIM", "CIHA"}:
         render_source(section)
     else:
         loaded = [
@@ -11699,7 +12086,7 @@ def main() -> None:
             if st.session_state.get(f"loaded_context_{src}")
         ]
         st.caption(
-            "A comparação usa as bases já carregadas nas seções SINAN/SIM/CIHA. "
+            "A Comparação de bancos de dados usa as bases já carregadas nas seções SINAN/SIM/CIHA. "
             "Carregue cada base separadamente antes de comparar para evitar sobrecarga."
         )
         render_comparison([x for x in loaded if x])
