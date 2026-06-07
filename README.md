@@ -10,7 +10,7 @@ Este aplicativo cumpre duas funções:
 2) Fornecer uma plataforma dinâmica de análise de dados via streamlit.
 
 # Baixando os bancos de dados e convertendo-os
-Ao extrair os arquivos "SINAN - scripts", "CIHA - scripts" e "SIM - scripts" que estão em formato RAR, haverão scripts separados para as diferentes etapas - baixar os arquivos do datasus, processar e compilar o que foi baixado para o formato parquet e para o formato duckdb, separado por ano. Bastar executar os scripts. Preferiu-se não unificar os arquivos para que o usuário tenha liberdade de escolher o que baixar. 
+Ao extrair o arquivo "Scripts" em formato RAR, haverão scripts separados para as diferentes etapas - baixar os arquivos do datasus, processar e compilar o que foi baixado para o formato parquet e para o formato duckdb, separado por ano. Bastar executar os scripts. Preferiu-se não unificar os arquivos para que o usuário tenha liberdade de escolher o que baixar. 
 Alternativamente, pode-se baixar os arquivos já compilados diretamente através dos "Banco de Dados" em formato .RAR.
 
 Quando os bancos de dados em .dbc são convertidos para .parquet, alguns filtros são aplicados para restringir quais casos são relevantes para a análise epidemiológica da meningite, da encefalite e da meningoencefalite. Além disso, como os dados disponibilizados pelo CIHA são separados por mês para cada respectivo ano, optou-se por mesclar os meses referentes a um dado ano, com a finalidade de analisar mais facilmente os casos referentes a um dado ano.
