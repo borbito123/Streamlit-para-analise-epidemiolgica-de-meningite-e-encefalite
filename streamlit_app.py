@@ -7024,7 +7024,7 @@ def render_comparison(loaded: Sequence[Dict[str, object]]) -> None:
     )
 
 
-def render_methodology()
+def render_methodology():
     st.divider() -> None:
     st.markdown("### Como usar este app para investigação epidemiológica")
     st.markdown(
