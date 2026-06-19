@@ -69,7 +69,7 @@ DEFAULT_MAX_PREVIEW_ROWS = 5000
 DEFAULT_SQL_LAB_ROW_LIMIT = 5000
 DEFAULT_FULL_EXPORT_ROW_LIMIT = 100000
 UPLOAD_CHUNK_SIZE = 1024 * 1024
-DEFAULT_DUCKDB_MEMORY_LIMIT = "2GB"
+DEFAULT_DUCKDB_MEMORY_LIMIT = "3GB"
 DEFAULT_DUCKDB_THREADS = 2
 DEFAULT_QUERY_CACHE_MAX_ENTRIES = 128
 DEFAULT_FASTPARQUET_ROW_LIMIT = 1500000
@@ -4123,6 +4123,16 @@ def query_sinan_hospitalization_internment(
             WHERE ano IS NOT NULL
               AND classi = '2'
             GROUP BY 1
+            UNION ALL
+            SELECT ano,
+                   'Sem confirmação / ignorados' AS grupo_caso,
+                   4 AS ordem_grupo,
+                   COUNT(*) AS denominador,
+                   COUNT(*) FILTER (WHERE hospitalizacao = '1') AS n
+            FROM base
+            WHERE ano IS NOT NULL
+              AND (classi IS NULL OR classi NOT IN ('1', '2'))
+            GROUP BY 1
         )
         SELECT ano,
                grupo_caso,
@@ -5601,13 +5611,10 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, grap
         rate_rows = []
         for _, row in ind.iterrows():
             notificacoes = row["notificacoes"]
-            sem_confirmacao_n = row["descartados"] + row["sem_classificacao"]
-            sem_confirmacao_pct = 100.0 * sem_confirmacao_n / notificacoes if notificacoes else np.nan
             rate_specs = [
                 ("Confirmados", row["confirmados"], row.get("pct_confirmacao"), "notificações"),
                 ("Descartados", row["descartados"], row.get("pct_descarte"), "notificações"),
                 ("Sem classificação / ignorados", row["sem_classificacao"], row.get("pct_sem_classificacao"), "notificações"),
-                ("Sem confirmação (descartados + sem classificação / ignorados)", sem_confirmacao_n, round(sem_confirmacao_pct, 2) if pd.notna(sem_confirmacao_pct) else np.nan, "notificações"),
             ]
             for label, n_abs, pct, denom_label in rate_specs:
                 rate_rows.append({
@@ -5627,7 +5634,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, grap
             color="indicador",
             markers=True,
             text="texto",
-            title="SINAN: taxas de confirmados, descartados, sem classificação / ignorados e sem confirmação",
+            title="SINAN: taxas de confirmados, descartados e sem classificação / ignorados",
             labels={"ano": "Ano", "pct": "% das notificações", "indicador": "Indicador", "n": "Valor absoluto"},
             hover_data={"texto": False, "n": True, "denominador": True, "denominador_label": True},
         )
@@ -5714,7 +5721,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, grap
         if not assistencia.empty:
             assistencia = assistencia.copy()
             assistencia["texto"] = [f"{br_pct(p)} (n={br_int(n)})" for p, n in zip(assistencia["pct"], assistencia["n"])]
-            grupo_hosp_order = ["Total de notificações", "Confirmados", "Descartados"]
+            grupo_hosp_order = ["Total de notificações", "Confirmados", "Descartados", "Sem confirmação / ignorados"]
             fig_assistencia = px.bar(
                 assistencia,
                 x="ano",
@@ -5730,7 +5737,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, grap
             render_plotly_chart(fig_assistencia)
             render_interval_total(assistencia, value_col="n", by_col="grupo_caso", denominator_col="denominador", denominator_label="registros do grupo")
             copyable_dataframe(assistencia.drop(columns=["ordem_grupo"], errors="ignore"), width="stretch", hide_index=True)
-            download_button(assistencia.drop(columns=["ordem_grupo"], errors="ignore"), "sinan_hospitalizacao_total_notificacoes_confirmados_descartados.csv")
+            download_button(assistencia.drop(columns=["ordem_grupo"], errors="ignore"), "sinan_hospitalizacao_total_notificacoes_confirmados_descartados_sem_confirmacao_ignorados.csv")
         else:
             st.info("Para gerar o gráfico comparativo de hospitalização, CLASSI_FIN, data e ATE_HOSPIT precisam existir no SINAN.")
 
@@ -5794,7 +5801,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, grap
 
         comunicantes = query_sinan_communicants_prophylaxis(table, exprs, base_where, communicants_col, prophylaxis_col)
         if not comunicantes.empty:
-            st.markdown("**Comunicantes e quimioprofilaxia**")
+            st.markdown("**SINAN: número de comunicantes por realização de quimioprofilaxia**")
             st.caption("Segundo a estrutura do dicionário de dados do SINAN para meningite, `MED_NUCOMU` registra o número de comunicantes identificados e `MED_QUIMIO` informa se foi realizada quimioprofilaxia, codificada como Sim, Não ou Ignorado. O gráfico cruza o total de comunicantes registrados por ano com a situação de realização da quimioprofilaxia e inclui a série total de comunicantes.")
             comunicantes = comunicantes.copy()
             comunicantes["serie"] = comunicantes["quimioprofilaxia"].astype(str)
@@ -5908,7 +5915,7 @@ def render_indicators_tab(table: LoadedTable, source: str, base_where: str, grap
                 color_discrete_map={
                     "Total de óbitos": "#000000",
                     "Meningite mencionada": "#1F77B4",
-                    "Meningite como causa básica": "#2CA02C",
+                    "Meningite como causa básica": DEATH_RED,
                 },
             )
             disable_death_red(fig)
@@ -6322,7 +6329,7 @@ def render_cid_tab(table: LoadedTable, source: str, graph_where: str, exprs: Dic
             y="grupo_etiologico",
             orientation="h",
             text="texto",
-            title="",
+            title="Letalidade conforme grupo etiológico do SINAN",
             labels={"letalidade_pct": "Óbitos por meningite / casos confirmados (%)", "grupo_etiologico": "Grupo etiológico", "denominador_letalidade": "Casos confirmados do grupo"},
             hover_data={"obitos_meningite": True, "denominador_letalidade": True},
             color_discrete_sequence=[PLOTLY_DEFAULT_BLUE],
