@@ -67,7 +67,7 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_VERSION = "2026-06-21-v33-titulos-sinan-cid10-performance"
+APP_VERSION = "2026-06-25-v35-quimiocitologia-classificacao-etiologica"
 
 # =============================================================================
 # Controles de desempenho e limites defensivos
@@ -1348,96 +1348,136 @@ SINAN_AUXILIARY_CID10_CANDIDATES = [
 
 SINAN_QUIMIO_INTERPRETATION_ROWS = [
     {
-        "Parâmetro": "Hemácias",
-        "Bacteriana": "Geralmente ausentes/baixas; elevação sugere punção traumática, hemorragia ou quadro necro-hemorrágico associado.",
-        "Viral/asséptica": "Geralmente ausentes/baixas; herpes e alguns quadros encefalíticos podem cursar com hemácias.",
-        "Fúngica/TB": "Sem padrão específico; interpretar com aspecto do LCR e demais marcadores.",
-        "Helmintos/parasitária eosinofílica": "Sem padrão específico; pode haver pleocitose eosinofílica sem hemácias importantes.",
-        "Protozoários": "Naegleria/PAM pode simular bacteriana e pode ter LCR turvo/hemorrágico.",
+        "Perfil/etiologia": "LCR normal",
+        "Leucócitos (céls/mm³)": "0–5 em crianças >6 meses/adultos; pode chegar a 30–32 em neonatos",
+        "Glicose": ">50% da glicose sanguínea; em adultos, frequentemente cerca de 2/3 da glicemia",
+        "Proteínas": "<40 mg/dL no MSD; adultos em geral 15–45 mg/dL, com variação entre laboratórios",
+        "Tipo celular principal": "Sem pleocitose; células mononucleares, principalmente linfócitos, com monócitos em menor proporção",
+        "Aspecto do líquor": "Límpido",
+        "Lactato": "1–3 mmol/L",
+        "Notas": "Ver diferenças por idade abaixo",
     },
     {
-        "Parâmetro": "Neutrófilos",
-        "Bacteriana": "Predomínio neutrofílico, frequentemente muito aumentado.",
-        "Viral/asséptica": "Predomínio linfocitário; pode haver neutrófilos nas primeiras 24-48h.",
-        "Fúngica/TB": "Frequentemente linfocítica ou mista; TB pode ser mista no início.",
-        "Helmintos/parasitária eosinofílica": "Pode haver mistura celular; eosinófilos são a pista principal.",
-        "Protozoários": "PAM/Naegleria costuma ter pleocitose neutrofílica intensa, semelhante à bacteriana.",
+        "Perfil/etiologia": "Viral",
+        "Leucócitos (céls/mm³)": "50–1.000",
+        "Glicose": "Usualmente normal; em geral >45% da glicose sanguínea",
+        "Proteínas": "Elevadas, em geral <200 mg/dL",
+        "Tipo celular principal": "Pleocitose com predomínio linfocitário; pode iniciar com neutrófilos nas primeiras 24–48h",
+        "Aspecto do líquor": "Límpido",
+        "Lactato": "—",
+        "Notas": "(a)",
     },
     {
-        "Parâmetro": "Glicose",
-        "Bacteriana": "Baixa ou muito baixa, muitas vezes <50% da glicemia sérica.",
-        "Viral/asséptica": "Usualmente normal.",
-        "Fúngica/TB": "Frequentemente baixa, sobretudo TB/criptococose.",
-        "Helmintos/parasitária eosinofílica": "Usualmente normal, mas pode variar em doença grave.",
-        "Protozoários": "Pode ser baixa, especialmente na PAM/Naegleria.",
+        "Perfil/etiologia": "Bacteriana",
+        "Leucócitos (céls/mm³)": "1.000–5.000 como faixa típica; extremos podem variar de <100 a >10.000",
+        "Glicose": "Reduzida; em geral <40–50% da glicose sanguínea. Ideal: razão LCR/soro com glicemia simultânea",
+        "Proteínas": "Elevadas, geralmente 100–500 mg/dL",
+        "Tipo celular principal": "Pleocitose com predomínio de neutrófilos, mas pode variar, inclusive após antibiótico",
+        "Aspecto do líquor": "Turvo ou purulento",
+        "Lactato": "—",
+        "Notas": "(b), (c), (d), (g)",
     },
     {
-        "Parâmetro": "Leucócitos",
-        "Bacteriana": "Geralmente muito elevados; valores >1.000-2.000 células/µL favorecem bacteriana.",
-        "Viral/asséptica": "Elevação menor/moderada, tipicamente <300-1.000 células/µL conforme referência.",
-        "Fúngica/TB": "Elevação variável, geralmente menor que bacteriana aguda, mas pode ser importante.",
-        "Helmintos/parasitária eosinofílica": "Pleocitose com fração eosinofílica relevante.",
-        "Protozoários": "Pode ser muito alta na PAM/Naegleria.",
+        "Perfil/etiologia": "Tuberculosa",
+        "Leucócitos (céls/mm³)": "50–300",
+        "Glicose": "Reduzida; em geral <45–50% da glicose sanguínea",
+        "Proteínas": "Elevadas, geralmente 50–300 mg/dL",
+        "Tipo celular principal": "Pleocitose com predomínio linfocitário/mononuclear; pode haver componente neutrofílico",
+        "Aspecto do líquor": "Turvo, mas pode estar límpido",
+        "Lactato": "—",
+        "Notas": "(e)",
     },
     {
-        "Parâmetro": "Eosinófilos",
-        "Bacteriana": "Não costuma predominar.",
-        "Viral/asséptica": "Não costuma predominar.",
-        "Fúngica/TB": "Pode ocorrer em algumas micoses, mas não é o padrão principal.",
-        "Helmintos/parasitária eosinofílica": "Marcador-chave: eosinofilia no LCR sugere meningite eosinofílica, frequentemente helmíntica.",
-        "Protozoários": "Geralmente não é o marcador principal.",
-    },
-    {
-        "Parâmetro": "Proteínas",
-        "Bacteriana": "Elevadas; valores >220 mg/dL favorecem fortemente bacteriana em alguns critérios.",
-        "Viral/asséptica": "Normais a moderadamente elevadas.",
-        "Fúngica/TB": "Elevadas, muitas vezes de forma persistente/subaguda.",
-        "Helmintos/parasitária eosinofílica": "Normais a elevadas; podem aumentar com inflamação intensa.",
-        "Protozoários": "Frequentemente elevadas em PAM/Naegleria.",
-    },
-    {
-        "Parâmetro": "Monócitos",
-        "Bacteriana": "Menor participação no padrão típico agudo; pode aparecer após tratamento/evolução.",
-        "Viral/asséptica": "Pode compor o predomínio mononuclear.",
-        "Fúngica/TB": "Comum em padrões crônicos/subagudos mononucleares.",
-        "Helmintos/parasitária eosinofílica": "Pode compor a pleocitose junto a linfócitos/eosinófilos.",
-        "Protozoários": "Variável; não é a pista principal na PAM.",
-    },
-    {
-        "Parâmetro": "Linfócitos",
-        "Bacteriana": "Não é o padrão típico inicial, mas pode predominar em fases iniciais/atípicas ou após antibiótico.",
-        "Viral/asséptica": "Predomínio linfocitário é o padrão clássico.",
-        "Fúngica/TB": "Predomínio linfocitário ou misto é frequente.",
-        "Helmintos/parasitária eosinofílica": "Pode estar elevado junto a eosinófilos.",
-        "Protozoários": "PAM tende mais a neutrófilos; outros protozoários podem variar.",
-    },
-    {
-        "Parâmetro": "Cloreto",
-        "Bacteriana": "Pode estar reduzido, mas tem baixa especificidade isolada.",
-        "Viral/asséptica": "Geralmente preservado.",
-        "Fúngica/TB": "Redução de cloreto é classicamente descrita em TB, mas deve ser interpretada com cautela.",
-        "Helmintos/parasitária eosinofílica": "Sem padrão útil isolado.",
-        "Protozoários": "Sem padrão útil isolado.",
+        "Perfil/etiologia": "Fúngica, com destaque para Cryptococcus",
+        "Leucócitos (céls/mm³)": "20–500; pode ser <20 em imunossuprimidos, especialmente AIDS",
+        "Glicose": "Reduzida; em geral <40–50% da glicose sanguínea",
+        "Proteínas": "Elevadas, usualmente >45 mg/dL",
+        "Tipo celular principal": "Normalmente linfócitos/mononucleares",
+        "Aspecto do líquor": "Frequentemente límpido",
+        "Lactato": "—",
+        "Notas": "(f)",
     },
 ]
 
+SINAN_QUIMIO_NOTE_ROWS = [
+    {
+        "Índice": "(a)",
+        "Onde se aplica": "Viral — tipo celular",
+        "Nota": "O LCR pode ser neutrofílico no início da apresentação. Nas primeiras 24–48h, uma meningite viral pode mimetizar padrão bacteriano; a evolução, PCR/cultura e repetição do LCR podem esclarecer.",
+    },
+    {
+        "Índice": "(b)",
+        "Onde se aplica": "Bacteriana — leucócitos",
+        "Nota": "A faixa 1.000–5.000 céls/mm³ é a apresentação típica, não o limite biológico. O Mandell descreve variação aproximada de <100 a >10.000 céls/mm³.",
+    },
+    {
+        "Índice": "(c)",
+        "Onde se aplica": "Bacteriana — tipo celular",
+        "Nota": "Cerca de 10% dos pacientes com meningite bacteriana podem ter predomínio linfocitário no LCR. Isso não deve excluir etiologia bacteriana quando o contexto clínico é compatível.",
+    },
+    {
+        "Índice": "(d)",
+        "Onde se aplica": "Bacteriana — glicose",
+        "Nota": "A glicose do LCR deve ser comparada com glicemia sérica colhida no mesmo momento. A razão LCR/soro ≤0,4 é observada na maioria dos casos bacterianos e é mais informativa que a glicose absoluta isolada.",
+    },
+    {
+        "Índice": "(e)",
+        "Onde se aplica": "Tuberculosa — tipo celular",
+        "Nota": "Pode ocorrer paradoxo terapêutico: durante o tratamento antituberculoso, um LCR inicialmente mononuclear pode tornar-se neutrofílico, sem que isso signifique necessariamente troca de etiologia.",
+    },
+    {
+        "Índice": "(f)",
+        "Onde se aplica": "Criptocócica/fúngica — leucócitos",
+        "Nota": "Em pacientes com AIDS, mais de 75% dos casos criptocócicos podem ter <20 céls/mm³. Portanto, a faixa 20–500 não deve ser usada rigidamente em imunossuprimidos.",
+    },
+    {
+        "Índice": "(g)",
+        "Onde se aplica": "Listeriose e outras bacterianas — predomínio celular",
+        "Nota": "Listeria monocytogenes, classificada no SINAN em CLA_ME_BAC como 'outras bactérias', pode ter predomínio mononuclear/linfocitário em cerca de 25–30% dos casos; em pacientes previamente tratados, a proporção de padrão atípico pode ser ainda maior. Assim, no gráfico de predomínio compatível vs. discordante, parte da discordância pode refletir fisiopatologia conhecida, não erro de classificação do SINAN.",
+    },
+]
+
+SINAN_LCR_AGE_DIFFERENCES_ROWS = [
+    {
+        "Parâmetro": "Leucócitos",
+        "Neonatos": "0–32 céls/mm³; pode haver pequena celularidade sem meningite",
+        "Crianças >6 meses/adultos": "0–5 céls/mm³",
+        "Leitura prática": "Usar pontos de corte por idade. Um valor aceitável em neonato pode ser anormal em criança maior ou adulto.",
+    },
+    {
+        "Parâmetro": "Proteínas",
+        "Neonatos": "20–170 mg/dL",
+        "Crianças >6 meses/adultos": "15–45 mg/dL",
+        "Leitura prática": "Proteína é fisiologicamente mais alta no início da vida e cai com a maturação da barreira sangue-LCR.",
+    },
+    {
+        "Parâmetro": "Glicose",
+        "Neonatos": "Geralmente ~80% da glicemia; faixa aproximada 34–119 mg/dL",
+        "Crianças >6 meses/adultos": "Geralmente ~2/3 da glicemia; em geral 45–80 mg/dL",
+        "Leitura prática": "A interpretação correta depende de glicemia sérica simultânea; evitar concluir hipoglicorraquia apenas por valor absoluto.",
+    },
+]
 
 SINAN_QUIMIO_REFERENCES = [
     {
-        "Referência": "Bennett JE, Dolin R, Blaser MJ, eds. Mandell, Douglas, and Bennett's Principles and Practice of Infectious Diseases. Elsevier.",
-        "Uso no painel": "Base clínica geral para padrões de LCR em meningites bacterianas, virais, fúngicas, tuberculosas e parasitárias.",
+        "Referência": "Bennett JE, Dolin R, Blaser MJ, eds. Mandell, Douglas, and Bennett's Principles and Practice of Infectious Diseases. Elsevier. Tabela 88.2.",
+        "Uso no painel": "Faixas típicas de leucócitos, glicose, proteína e notas de exceção por etiologia, incluindo viral inicial neutrofílica, bacteriana com extremos amplos, tuberculosa e criptocócica.",
+    },
+    {
+        "Referência": "MSD/Merck Manual Professional. Cerebrospinal Fluid Findings in Meningitis. https://www.msdmanuals.com/professional/multimedia/table/cerebrospinal-fluid-findings-in-meningitis",
+        "Uso no painel": "Resumo prático de tipo celular predominante, proteína, glicose e necessidade de comparar glicose do LCR com glicemia sérica.",
+    },
+    {
+        "Referência": "Shah SS et al. Age-specific reference values for cerebrospinal fluid protein concentration in neonates and young infants. J Hosp Med. 2011;6(1):22-27. https://pmc.ncbi.nlm.nih.gov/articles/PMC2978786/",
+        "Uso no painel": "Diferenças etárias do LCR, especialmente proteína mais alta em neonatos e queda com a maturação da barreira sangue-LCR.",
     },
     {
         "Referência": "Tunkel AR et al. Practice Guidelines for the Management of Bacterial Meningitis. Clinical Infectious Diseases. 2004;39:1267-1284.",
         "Uso no painel": "Interpretação de meningite bacteriana e limitações dos marcadores de LCR isolados.",
     },
     {
-        "Referência": "MSD/Merck Manual Professional. Cerebrospinal Fluid Findings in Meningitis; Cerebrospinal Fluid Abnormalities in Various Disorders.",
-        "Uso no painel": "Resumo prático de predominância celular, proteína e glicose por síndrome/etiologia.",
-    },
-    {
         "Referência": "Tunkel AR et al. 2017 IDSA Clinical Practice Guidelines for Healthcare-Associated Ventriculitis and Meningitis.",
-        "Uso no painel": "Ressalva de que normalidade de celularidade, glicose ou proteína não exclui infecção em contextos associados à assistência/neurocirurgia.",
+        "Uso no painel": "Ressalva de que celularidade, glicose ou proteína normais não excluem infecção em contextos associados à assistência/neurocirurgia.",
     },
     {
         "Referência": "WHO. Guidelines on meningitis diagnosis, treatment and care. 2025.",
@@ -1516,6 +1556,111 @@ SINAN_QUIMIO_PARAMS = {
     "linfo": {"label": "Linfócitos", "default_col": "LAB_LINFO"},
     "clor": {"label": "Cloreto", "default_col": "LAB_CLOR"},
 }
+
+# Aspecto do líquor (campo 48 da ficha de investigação — LAB_ASPECT / tp_aspector_liquor).
+# Categorias oficiais conforme dicionário de dados SINAN NET Meningite v5.0.
+SINAN_LAB_ASPECT = {
+    "1": "Límpido",
+    "2": "Purulento",
+    "3": "Hemorrágico",
+    "4": "Turvo",
+    "5": "Xantocrômico",
+    "6": "Outro",
+    "9": "Ignorado",
+}
+
+# =============================================================================
+# Classificação etiológica do LCR por faixas de referência (independente do
+# CLASSI_FIN/CON_DIAGES oficial do SINAN) — análise exploratória de quimiocitologia.
+# =============================================================================
+#
+# IMPORTANTE — limitações reconhecidas na literatura-fonte:
+# - As faixas abaixo são típicas, não limites absolutos. O próprio Mandell descreve
+#   meningite bacteriana com contagem de leucócitos variando de <100 a >10.000 céls/mm³,
+#   embora 1.000–5.000 seja a apresentação clássica usada como faixa operacional.
+# - Meningite viral pode ser neutrofílica nas primeiras 24–48h; meningite bacteriana
+#   pode ter predomínio linfocitário em uma minoria dos casos, incluindo apresentações
+#   atípicas, fases iniciais e casos parcialmente tratados.
+# - O SINAN registra apenas a glicose do LCR em mg/dL (LAB_GLICO), sem campo de
+#   glicemia sérica pareada. Clinicamente, a glicose deve ser comparada com o soro;
+#   na ausência desse dado, o painel usa glicose absoluta <40 mg/dL como proxy
+#   operacional para redução, sempre apresentada como limitação do banco.
+# - LAB_NEUTRO e LAB_LINFO no SINAN são percentuais do total de leucócitos (campo
+#   numeric(3), 0–100), não contagens absolutas. "Predomínio" é definido aqui como
+#   o maior percentual entre LAB_NEUTRO e LAB_LINFO para o mesmo registro.
+SINAN_ETIOLOGY_GROUPS = ["Viral", "Bacteriana", "Tuberculosa", "Fúngica"]
+
+# Faixas operacionais usadas nos algoritmos do painel. Leucócitos em células/mm³,
+# proteínas em mg/dL e glicose em mg/dL absoluto no LCR (proxy quando não há soro).
+SINAN_LCR_ETIOLOGY_RANGES = {
+    "Viral": {
+        "leuco": (50, 1000),
+        "prot": (0, 200),
+        "glico_min": 45,
+        "glico_desc": "Usualmente normal; idealmente >45% da glicose sanguínea",
+        "predominio": "Linfócitos",
+        "aspecto": "Límpido",
+        "nota": "Pode haver predomínio neutrofílico nas primeiras 24–48h.",
+    },
+    "Bacteriana": {
+        "leuco": (1000, 5000),
+        "prot": (100, 500),
+        "glico_max": 40,
+        "glico_desc": "Reduzida; em geral <40–50% da glicose sanguínea; razão LCR/soro ≤0,4 na maioria dos casos",
+        "predominio": "Neutrófilos",
+        "aspecto": "Turvo/purulento",
+        "nota": "Faixa típica; extremos documentados de <100 a >10.000 céls/mm³.",
+    },
+    "Tuberculosa": {
+        "leuco": (50, 300),
+        "prot": (50, 300),
+        "glico_max": 40,
+        "glico_desc": "Reduzida; em geral <45–50% da glicose sanguínea",
+        "predominio": "Linfócitos",
+        "aspecto": "Turvo ou límpido",
+        "nota": "Pode haver padrão misto; durante o tratamento pode ocorrer paradoxo terapêutico com neutrofilia.",
+    },
+    "Fúngica": {
+        "leuco": (20, 500),
+        "prot": (45, 10_000),
+        "glico_max": 40,
+        "glico_desc": "Reduzida; em geral <40–50% da glicose sanguínea",
+        "predominio": "Linfócitos",
+        "aspecto": "Frequentemente límpido",
+        "nota": "Em criptococose associada à AIDS, a contagem pode ser <20 céls/mm³ na maioria dos casos.",
+    },
+}
+
+SINAN_LCR_RANGES_SOURCE_NOTE = (
+    "Faixas de uso operacional/didático baseadas principalmente no Mandell, Douglas, and Bennett's Principles "
+    "and Practice of Infectious Diseases, na tabela de achados do LCR do MSD/Merck Manual Professional e em "
+    "literatura complementar sobre valores por idade. Elas descrevem padrões típicos e exceções relevantes; "
+    "não devem ser usadas como corte diagnóstico isolado. A glicose deve ser interpretada preferencialmente "
+    "pela razão LCR/soro, mas o SINAN geralmente só traz LAB_GLICO absoluto."
+)
+
+# Mapeia CON_DIAGES (+ CLA_ME_ETI para refinar a categoria 08 "outra etiologia")
+# para um dos 4 grupos etiológicos usados na comparação por faixas de LCR.
+# 01 (meningococcemia isolada) é deixado fora por não representar, isoladamente,
+# meningite confirmada por LCR. 05/06/09/10 (demais bacterianas) entram em
+# "Bacteriana". 07 (asséptica) é tratado operacionalmente como "Viral", seguindo
+# a mesma convenção já usada na conversão CID-10 deste app.
+SINAN_CLA_ME_ETI_FUNGAL_CODES = {"42", "43", "44", "64"}  # outros fungos, Cryptococcus, Candida, Aspergillus
+
+
+def sinan_expected_etiology_group_expr(con_code_sql: str, cla_me_eti_code_sql: Optional[str]) -> str:
+    fungal_codes = ", ".join(qstr(code) for code in sorted(SINAN_CLA_ME_ETI_FUNGAL_CODES))
+    eti_expr = cla_me_eti_code_sql or "NULL"
+    return f"""
+        CASE
+            WHEN {con_code_sql} = '04' THEN 'Tuberculosa'
+            WHEN {con_code_sql} = '07' THEN 'Viral'
+            WHEN {con_code_sql} IN ('02', '03', '05', '06', '09', '10') THEN 'Bacteriana'
+            WHEN {con_code_sql} = '08' AND {eti_expr} IN ({fungal_codes}) THEN 'Fúngica'
+            WHEN {con_code_sql} = '08' THEN 'Outra etiologia (não fúngica)'
+            ELSE NULL
+        END
+    """
 
 RACA_COR = {
     "1": "Branca",
@@ -1652,7 +1797,7 @@ SOURCE_CONFIG: Dict[str, SourceConfig] = {
         title="Notificações e investigação de casos",
         default_db="sinan_meningite_rio_estado.duckdb",
         default_table="sinan_meningite_rio_estado_data",
-        expected_period="2007–2025",
+        expected_period="2007–2026",
         date_candidates=["DT_NOTIFIC", "DT_SIN_PRI", "DT_INVEST", "DT_ENCERRA", "DT_DIGITA"],
         sex_candidates=["CS_SEXO", "SEXO"],
         age_candidates=["NU_IDADE_N", "IDADE", "IDADE_ANOS", "IDADEANOS"],
@@ -1672,7 +1817,7 @@ SOURCE_CONFIG: Dict[str, SourceConfig] = {
         title="Óbitos e causas de morte",
         default_db="sim_do_rio_estado.duckdb",
         default_table="sim_do_rio_estado_data",
-        expected_period="2007–2024",
+        expected_period="2007–2026",
         date_candidates=["DTOBITO", "DT_OBITO", "DTATESTADO", "DTNASC", "DT_NASC"],
         sex_candidates=["SEXO", "CS_SEXO"],
         age_candidates=["IDADE", "IDADEANOS", "IDADE_ANOS"],
@@ -1691,7 +1836,7 @@ SOURCE_CONFIG: Dict[str, SourceConfig] = {
         title="Atendimentos/internações informados à CIHA",
         default_db="ciha_rio_estado.duckdb",
         default_table="ciha_rio_estado_data",
-        expected_period="2011–2025",
+        expected_period="2007–2026",
         date_candidates=["DT_ATEND", "DT_SAIDA", "DT_INTER", "DT_INTERNA", "DT_COMPET", "COMPET", "ANO_CMPT"],
         sex_candidates=["SEXO", "CS_SEXO"],
         age_candidates=["IDADE", "IDADE_ANOS", "IDADEANOS", "NU_IDADE_N"],
@@ -3325,6 +3470,7 @@ class ColumnSelection:
     criterio_col: Optional[str] = None
     lab_puncao_col: Optional[str] = None
     lab_liquor_col: Optional[str] = None
+    lab_aspect_col: Optional[str] = None
     lab_hema_col: Optional[str] = None
     lab_neutro_col: Optional[str] = None
     lab_glico_col: Optional[str] = None
@@ -3394,6 +3540,7 @@ def default_selections(source: str, columns: Sequence[str]) -> ColumnSelection:
         sel.criterio_col = choose_candidate(columns, ["CRITERIO"])
         sel.lab_puncao_col = choose_candidate(columns, ["LAB_PUNCAO", "PUNCAO", "PUNCAO_LCR", "PUNCAO_LOMBAR"])
         sel.lab_liquor_col = choose_candidate(columns, ["LAB_LIQUOR", "LIQUOR", "QUIMIOCITOLOGICO", "EXAME_QUIMIOCITOLOGICO", "EXAME_LIQUOR"])
+        sel.lab_aspect_col = choose_candidate(columns, ["LAB_ASPECT", "ASPECTO_LIQUOR", "TP_ASPECTOR_LIQUOR", "ASPECTO"])
         sel.lab_hema_col = choose_candidate(columns, ["LAB_HEMA", "HEMACIAS", "NU_HEMACIAS"])
         sel.lab_neutro_col = choose_candidate(columns, ["LAB_NEUTRO", "NEUTROFILOS", "NU_NEUTROFILO", "NU_NEUTROFILOS"])
         sel.lab_glico_col = choose_candidate(columns, ["LAB_GLICO", "GLICOSE", "NU_GLICOSE"])
@@ -3497,10 +3644,17 @@ def build_expressions(source: str, sel: ColumnSelection) -> Dict[str, Optional[s
             exprs["sinan_g01_base_disease"] = None
         exprs["criterio_code"] = clean_code_expr(sel.criterio_col) if sel.criterio_col else None
         exprs["criterio_label"] = case_from_mapping(exprs["criterio_code"], SINAN_CRITERIO, "Sem critério/ignorado") if exprs["criterio_code"] else None
+        exprs["expected_etiology_group"] = (
+            sinan_expected_etiology_group_expr(exprs["con_code"], exprs.get("cla_me_eti_code"))
+            if exprs.get("con_code")
+            else None
+        )
         exprs["puncao_code"] = clean_code_expr(sel.lab_puncao_col) if sel.lab_puncao_col else None
         exprs["puncao_label"] = case_from_mapping(exprs["puncao_code"], YES_NO_IGN, "Sem informação") if exprs["puncao_code"] else None
         exprs["quimio_code"] = clean_code_expr(sel.lab_liquor_col) if sel.lab_liquor_col else None
         exprs["quimio_label"] = case_from_mapping(exprs["quimio_code"], YES_NO_IGN, "Sem informação") if exprs["quimio_code"] else None
+        exprs["lab_aspect_code"] = clean_code_expr(sel.lab_aspect_col) if sel.lab_aspect_col else None
+        exprs["lab_aspect_label"] = case_from_mapping(exprs["lab_aspect_code"], SINAN_LAB_ASPECT, "Sem informação/ignorado") if exprs["lab_aspect_code"] else None
         exprs["lab_hema"] = numeric_expr(sel.lab_hema_col) if sel.lab_hema_col else None
         exprs["lab_neutro"] = numeric_expr(sel.lab_neutro_col) if sel.lab_neutro_col else None
         exprs["lab_glico"] = numeric_expr(sel.lab_glico_col) if sel.lab_glico_col else None
@@ -4538,6 +4692,262 @@ def query_sinan_numeric_distribution(table: LoadedTable, value_expr: str, where_
     return df
 
 
+# =============================================================================
+# Classificação por faixas de LCR — comparação confirmados x faixa esperada
+# e rastreio de possível meningite entre descartados (ver constantes acima).
+# =============================================================================
+
+def _lcr_predominio_expr(exprs: Dict[str, Optional[str]]) -> Optional[str]:
+    """Predomínio celular (Neutrófilos x Linfócitos), ambos em % do total de leucócitos."""
+    neutro, linfo = exprs.get("lab_neutro"), exprs.get("lab_linfo")
+    if not neutro or not linfo:
+        return None
+    return f"""
+        CASE
+            WHEN {neutro} IS NULL OR {neutro} < 0 OR {linfo} IS NULL OR {linfo} < 0 THEN NULL
+            WHEN {neutro} > {linfo} THEN 'Neutrófilos'
+            WHEN {linfo} > {neutro} THEN 'Linfócitos'
+            ELSE 'Empate/indefinido'
+        END
+    """
+
+
+def query_sinan_confirmed_param_vs_range(
+    table: LoadedTable,
+    exprs: Dict[str, Optional[str]],
+    where_sql: str,
+    param: str,
+) -> pd.DataFrame:
+    """Para casos confirmados com grupo etiológico esperado definido, compara um
+    parâmetro numérico (leuco/prot) contra a faixa de referência do próprio grupo
+    e retorna, por grupo, quantos casos ficaram dentro, abaixo ou acima da faixa.
+    """
+    expected = exprs.get("expected_etiology_group")
+    value_expr = exprs.get(f"lab_{param}")
+    if not expected or not value_expr:
+        return pd.DataFrame()
+
+    case_rows = []
+    for grupo, faixas in SINAN_LCR_ETIOLOGY_RANGES.items():
+        rng = faixas.get(param)
+        if not rng:
+            continue
+        lo, hi = rng
+        case_rows.append(
+            f"WHEN grupo = {qstr(grupo)} THEN "
+            f"CASE WHEN valor < {lo} THEN 'Abaixo da faixa típica' "
+            f"WHEN valor > {hi} THEN 'Acima da faixa típica' "
+            f"ELSE 'Dentro da faixa típica' END"
+        )
+    if not case_rows:
+        return pd.DataFrame()
+    classificacao_sql = "CASE " + " ".join(case_rows) + " ELSE NULL END"
+
+    sql = f"""
+        WITH base AS (
+            SELECT {expected} AS grupo, {value_expr} AS valor
+            FROM {table.ref_sql}
+            {where_sql}
+        ), valid AS (
+            SELECT grupo, valor, {classificacao_sql} AS posicao
+            FROM base
+            WHERE grupo IS NOT NULL AND valor IS NOT NULL AND valor >= 0
+        ), totals AS (
+            SELECT grupo, COUNT(*) AS total FROM valid GROUP BY 1
+        )
+        SELECT v.grupo AS grupo_etiologico,
+               v.posicao,
+               COUNT(*) AS n,
+               t.total AS denominador,
+               ROUND(100.0 * COUNT(*) / NULLIF(t.total, 0), 1) AS pct
+        FROM valid v
+        JOIN totals t USING (grupo)
+        GROUP BY 1, 2, 4
+        ORDER BY 1,
+                 CASE v.posicao WHEN 'Abaixo da faixa típica' THEN 1 WHEN 'Dentro da faixa típica' THEN 2 WHEN 'Acima da faixa típica' THEN 3 ELSE 4 END
+    """
+    return run_query(table, sql)
+
+
+def query_sinan_confirmed_predominio_vs_expected(
+    table: LoadedTable, exprs: Dict[str, Optional[str]], where_sql: str
+) -> pd.DataFrame:
+    """Compara o predomínio celular observado (neutrófilos x linfócitos) com o
+    predomínio esperado para o grupo etiológico do caso confirmado."""
+    expected = exprs.get("expected_etiology_group")
+    predominio_expr = _lcr_predominio_expr(exprs)
+    if not expected or not predominio_expr:
+        return pd.DataFrame()
+
+    expected_predominio_case = "CASE " + " ".join(
+        f"WHEN {expected} = {qstr(grupo)} THEN {qstr(faixas['predominio'])}"
+        for grupo, faixas in SINAN_LCR_ETIOLOGY_RANGES.items()
+    ) + " ELSE NULL END"
+
+    sql = f"""
+        WITH base AS (
+            SELECT {expected} AS grupo,
+                   {predominio_expr} AS predominio_observado,
+                   {expected_predominio_case} AS predominio_esperado
+            FROM {table.ref_sql}
+            {where_sql}
+        ), valid AS (
+            SELECT grupo, predominio_observado, predominio_esperado,
+                   CASE
+                       WHEN predominio_observado = predominio_esperado THEN 'Compatível com o esperado'
+                       WHEN predominio_observado = 'Empate/indefinido' THEN 'Empate/indefinido'
+                       ELSE 'Discordante do esperado'
+                   END AS situacao
+            FROM base
+            WHERE grupo IS NOT NULL AND predominio_observado IS NOT NULL AND predominio_esperado IS NOT NULL
+        ), totals AS (
+            SELECT grupo, COUNT(*) AS total FROM valid GROUP BY 1
+        )
+        SELECT v.grupo AS grupo_etiologico,
+               v.situacao,
+               COUNT(*) AS n,
+               t.total AS denominador,
+               ROUND(100.0 * COUNT(*) / NULLIF(t.total, 0), 1) AS pct
+        FROM valid v
+        JOIN totals t USING (grupo)
+        GROUP BY 1, 2, 4
+        ORDER BY 1,
+                 CASE v.situacao WHEN 'Compatível com o esperado' THEN 1 WHEN 'Discordante do esperado' THEN 2 ELSE 3 END
+    """
+    return run_query(table, sql)
+
+
+def query_sinan_confirmed_glucose_vs_expected(
+    table: LoadedTable, exprs: Dict[str, Optional[str]], where_sql: str
+) -> pd.DataFrame:
+    """Compara a glicose absoluta do LCR (mg/dL — ver nota de limitação) com a
+    direção esperada para o grupo etiológico: reduzida (<40) nas bacteriana/TB/
+    fúngica; usualmente preservada (>=40) na viral."""
+    expected = exprs.get("expected_etiology_group")
+    glico = exprs.get("lab_glico")
+    if not expected or not glico:
+        return pd.DataFrame()
+
+    case_rows = []
+    for grupo, faixas in SINAN_LCR_ETIOLOGY_RANGES.items():
+        if "glico_min" in faixas:
+            case_rows.append(
+                f"WHEN {expected} = {qstr(grupo)} THEN "
+                f"CASE WHEN {glico} < {faixas['glico_min']} THEN 'Reduzida (atípico p/ viral)' ELSE 'Preservada (esperado)' END"
+            )
+        elif "glico_max" in faixas:
+            case_rows.append(
+                f"WHEN {expected} = {qstr(grupo)} THEN "
+                f"CASE WHEN {glico} < {faixas['glico_max']} THEN 'Reduzida (esperado)' ELSE 'Preservada (atípico)' END"
+            )
+    if not case_rows:
+        return pd.DataFrame()
+    classificacao_sql = "CASE " + " ".join(case_rows) + " ELSE NULL END"
+
+    sql = f"""
+        WITH base AS (
+            SELECT {expected} AS grupo, {glico} AS valor, {classificacao_sql} AS posicao
+            FROM {table.ref_sql}
+            {where_sql}
+        ), valid AS (
+            SELECT grupo, posicao FROM base
+            WHERE grupo IS NOT NULL AND valor IS NOT NULL AND valor >= 0 AND posicao IS NOT NULL
+        ), totals AS (
+            SELECT grupo, COUNT(*) AS total FROM valid GROUP BY 1
+        )
+        SELECT v.grupo AS grupo_etiologico,
+               v.posicao,
+               COUNT(*) AS n,
+               t.total AS denominador,
+               ROUND(100.0 * COUNT(*) / NULLIF(t.total, 0), 1) AS pct
+        FROM valid v
+        JOIN totals t USING (grupo)
+        GROUP BY 1, 2, 4
+        ORDER BY 1, 2
+    """
+    return run_query(table, sql)
+
+
+def query_sinan_discarded_meningitis_risk(
+    table: LoadedTable, exprs: Dict[str, Optional[str]], where_sql: str
+) -> pd.DataFrame:
+    """Para casos descartados com LCR coletado, calcula quantos seriam
+    classificáveis como possível meningite considerando isoladamente:
+    - pleocitose (leucócitos dentro de qualquer faixa etiológica, ou seja >=20);
+    - glicose reduzida (<40 mg/dL absoluto no LCR);
+    - proteína elevada (>=45 mg/dL, menor limiar entre as faixas usadas).
+    Cada critério é avaliado de forma independente (não é uma combinação AND),
+    propositalmente, para mostrar o efeito de cada marcador isolado, como pedido.
+    """
+    leuco, glico, prot = exprs.get("lab_leuco"), exprs.get("lab_glico"), exprs.get("lab_prot")
+    rows = []
+
+    def _flag_query(label: str, value_expr: Optional[str], threshold_sql: str) -> Optional[pd.DataFrame]:
+        if not value_expr:
+            return None
+        sql = f"""
+            WITH base AS (
+                SELECT {value_expr} AS valor
+                FROM {table.ref_sql}
+                {where_sql}
+            ), valid AS (
+                SELECT valor FROM base WHERE valor IS NOT NULL AND valor >= 0
+            )
+            SELECT {qstr(label)} AS criterio,
+                   COUNT(*) FILTER (WHERE {threshold_sql}) AS n_sugestivo,
+                   COUNT(*) AS denominador,
+                   ROUND(100.0 * COUNT(*) FILTER (WHERE {threshold_sql}) / NULLIF(COUNT(*), 0), 1) AS pct_sugestivo
+            FROM valid
+        """
+        return run_query(table, sql)
+
+    pleo = _flag_query("Pleocitose isolada (leucócitos ≥ 20 céls/mm³)", leuco, "valor >= 20")
+    if pleo is not None and not pleo.empty:
+        rows.append(pleo)
+    gli = _flag_query("Glicose reduzida isolada (< 40 mg/dL no LCR)", glico, "valor < 40")
+    if gli is not None and not gli.empty:
+        rows.append(gli)
+    pr = _flag_query("Proteína elevada isolada (≥ 45 mg/dL)", prot, "valor >= 45")
+    if pr is not None and not pr.empty:
+        rows.append(pr)
+
+    if not rows:
+        return pd.DataFrame()
+    return pd.concat(rows, ignore_index=True)
+
+
+def query_sinan_confirmed_etiology_counts(
+    table: LoadedTable, exprs: Dict[str, Optional[str]], where_sql: str
+) -> pd.DataFrame:
+    """Conta quantos casos confirmados (com LCR) caem em cada grupo etiológico
+    esperado — usado como denominador/contexto para os gráficos de comparação."""
+    expected = exprs.get("expected_etiology_group")
+    if not expected:
+        return pd.DataFrame()
+    sql = f"""
+        SELECT {expected} AS grupo_etiologico, COUNT(*) AS n
+        FROM {table.ref_sql}
+        {where_sql}
+        GROUP BY 1
+        ORDER BY 2 DESC
+    """
+    df = run_query(table, sql)
+    return df[df["grupo_etiologico"].notna()] if not df.empty else df
+
+
+def query_sinan_numeric_field_with_class_filter(
+    table: LoadedTable, value_expr: str, where_sql: str
+) -> int:
+    """Conta quantos registros têm valor numérico válido (>=0) para o expr dado,
+    dentro do where_sql informado. Usado para denominadores de cobertura."""
+    sql = f"""
+        WITH base AS (SELECT {value_expr} AS valor FROM {table.ref_sql} {where_sql})
+        SELECT COUNT(*) AS n FROM base WHERE valor IS NOT NULL AND valor >= 0
+    """
+    df = run_query(table, sql)
+    return int(df.iloc[0]["n"]) if not df.empty else 0
+
+
 def query_sinan_indicators(table: LoadedTable, exprs: Dict[str, Optional[str]], where_sql: str) -> pd.DataFrame:
     dt, classi, evol = exprs.get("dt"), exprs.get("classi_code"), exprs.get("evol_code")
     con_group = exprs.get("con_group")
@@ -5153,6 +5563,7 @@ def query_enriched_preview(table: LoadedTable, sel: ColumnSelection, exprs: Dict
         sel.criterio_col,
         sel.lab_puncao_col,
         sel.lab_liquor_col,
+        sel.lab_aspect_col,
         sel.lab_hema_col,
         sel.lab_neutro_col,
         sel.lab_glico_col,
@@ -5410,17 +5821,315 @@ def render_cid_reference() -> None:
 
 
 def render_quimio_interpretation() -> None:
-    st.markdown("### Interpretação usual do exame quimiocitológico do líquor (LCR)")
+    st.markdown("### 📌 Tabela-resumo — Como os parâmetros do LCR costumam se comportar por etiologia")
+    st.markdown(
+        """
+        <div style="border-left: 0.45rem solid #1f77b4; background: rgba(31, 119, 180, 0.08);
+                    padding: 0.8rem 1rem; border-radius: 0.5rem; margin: 0.35rem 0 0.9rem 0;">
+            <strong>Use esta tabela como referência visual rápida.</strong><br>
+            Ela resume padrões típicos de LCR e, logo abaixo, traz as exceções que mais interferem na leitura
+            dos gráficos do painel.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.caption(
         "Padrões de LCR ajudam a levantar hipóteses, mas não substituem cultura, PCR, Gram, tinta nanquim, sorologia, "
-        "epidemiologia e avaliação clínica. Os limites variam com idade, coleta traumática, antibiótico prévio e laboratório."
+        "epidemiologia e avaliação clínica. Os limites variam com idade, coleta traumática, antibiótico prévio, "
+        "imunossupressão e laboratório."
     )
     copyable_dataframe(pd.DataFrame(SINAN_QUIMIO_INTERPRETATION_ROWS), width="stretch", hide_index=True)
+
+    st.markdown("**Observações da tabela — exceções que devem ser lidas junto dos índices (a–g):**")
+    copyable_dataframe(pd.DataFrame(SINAN_QUIMIO_NOTE_ROWS), width="stretch", hide_index=True)
+
+    st.markdown("**Diferenças entre neonatos e crianças/adultos nos achados do líquido cefalorraquidiano**")
+    st.caption(
+        "A interpretação de LCR em neonatos não deve usar automaticamente os mesmos intervalos de crianças maiores e adultos. "
+        "Os valores abaixo sintetizam os pontos de referência usados no painel e devem ser aplicados com o contexto clínico."
+    )
+    copyable_dataframe(pd.DataFrame(SINAN_LCR_AGE_DIFFERENCES_ROWS), width="stretch", hide_index=True)
+
     refs_text = "\n".join(
         f"- {row['Referência']} — {row['Uso no painel']}"
         for row in SINAN_QUIMIO_REFERENCES
     )
     st.markdown("**Referências bibliográficas usadas para esta síntese:**\n" + refs_text)
+
+
+def render_quimio_classification_tab(
+    table: LoadedTable, exprs: Dict[str, Optional[str]], base_where: str
+) -> None:
+    """Classificação etiológica do LCR por faixas de referência (independente do
+    CLASSI_FIN/CON_DIAGES oficial) — comparação para casos confirmados e rastreio
+    de possível meningite entre casos descartados, conforme solicitado.
+    """
+    st.markdown("### Classificação etiológica do líquor por faixas de referência")
+    st.caption(
+        "Esta análise é exploratória e independente da classificação oficial do SINAN. Ela usa apenas os "
+        "parâmetros quimiocitológicos do LCR (leucócitos, proteínas, glicose e predomínio celular) comparados "
+        "a faixas de referência da literatura, para avaliar o quanto o perfil laboratorial de cada caso é "
+        "compatível com a etiologia registrada (confirmados) ou poderia sugerir meningite mesmo tendo sido "
+        "descartado (descartados)."
+    )
+
+    expected = exprs.get("expected_etiology_group")
+    classi_code = exprs.get("classi_code")
+    leuco, prot, glico = exprs.get("lab_leuco"), exprs.get("lab_prot"), exprs.get("lab_glico")
+    neutro, linfo = exprs.get("lab_neutro"), exprs.get("lab_linfo")
+
+    missing = []
+    if not classi_code:
+        missing.append("CLASSI_FIN")
+    if not exprs.get("con_code"):
+        missing.append("CON_DIAGES")
+    if not leuco:
+        missing.append("LAB_LEUCO")
+    if not prot:
+        missing.append("LAB_PROT")
+    if not glico:
+        missing.append("LAB_GLICO")
+    if missing:
+        st.warning(
+            "Para esta análise funcionar plenamente, preciso detectar: " + ", ".join(missing) +
+            ". Verifique a configuração de colunas do SINAN."
+        )
+        if not classi_code or not exprs.get("con_code") or not leuco:
+            return
+
+    with st.expander("Faixas de referência usadas e limitações reconhecidas", expanded=False):
+        ranges_rows = []
+        for grupo, faixas in SINAN_LCR_ETIOLOGY_RANGES.items():
+            leuco_rng = faixas.get("leuco")
+            prot_rng = faixas.get("prot")
+            if "glico_desc" in faixas:
+                glico_desc = faixas["glico_desc"]
+            else:
+                glico_desc = (
+                    f"< {faixas['glico_max']} mg/dL (proxy operacional de redução)"
+                    if "glico_max" in faixas
+                    else f"≥ {faixas['glico_min']} mg/dL (proxy operacional de preservação)"
+                )
+            ranges_rows.append(
+                {
+                    "Grupo etiológico": grupo,
+                    "Leucócitos (céls/mm³)": f"{leuco_rng[0]:g}–{leuco_rng[1]:g}" if leuco_rng else "—",
+                    "Proteínas (mg/dL)": f"{prot_rng[0]:g}–{prot_rng[1]:g}" if prot_rng else "—",
+                    "Glicose": glico_desc,
+                    "Predomínio celular esperado": faixas["predominio"],
+                    "Aspecto habitual": faixas.get("aspecto", "—"),
+                    "Observação": faixas.get("nota", "—"),
+                }
+            )
+        copyable_dataframe(pd.DataFrame(ranges_rows), width="stretch", hide_index=True)
+        st.caption(SINAN_LCR_RANGES_SOURCE_NOTE)
+        st.caption(
+            "Glicose: o SINAN só registra a glicose do LCR (LAB_GLICO), sem glicemia sérica pareada. "
+            "A literatura recomenda a razão LCR/soro como parâmetro mais acurado; na ausência do soro, "
+            "este painel usa o valor absoluto no LCR como proxy (corte de 40 mg/dL), o que é uma limitação "
+            "deste banco de dados, não da metodologia clínica em si."
+        )
+
+    def br_int(value: object) -> str:
+        if pd.isna(value):
+            return "—"
+        return f"{int(value):,}".replace(",", ".")
+
+    def br_pct(value: object) -> str:
+        if pd.isna(value):
+            return "—"
+        return f"{float(value):.1f}%".replace(".", ",")
+
+    def add_text(df: pd.DataFrame, n_col: str = "n", pct_col: str = "pct") -> pd.DataFrame:
+        out = df.copy()
+        out["texto"] = [f"{br_int(n)} ({br_pct(p)})" for n, p in zip(out[n_col], out[pct_col])]
+        return out
+
+    # -------------------------------------------------------------------
+    # Bloco A — Casos confirmados: comparação com a faixa esperada
+    # -------------------------------------------------------------------
+    st.divider()
+    st.markdown("#### Casos confirmados — aderência às faixas esperadas por grupo etiológico")
+    st.caption(
+        "Considera apenas casos com CLASSI_FIN = confirmado, punção lombar realizada e grupo etiológico "
+        "identificável a partir de CON_DIAGES (e CLA_ME_ETI para distinguir fungo dentro de 'outra etiologia'). "
+        "Meningococcemia isolada (CON_DIAGES = 01) é excluída por não representar, isoladamente, meningite "
+        "confirmada por LCR."
+    )
+
+    confirmed_where = append_clause(base_where, f"{classi_code} = '1'")
+    if exprs.get("puncao_code"):
+        confirmed_where = append_clause(confirmed_where, f"{exprs['puncao_code']} = '1'")
+
+    etio_counts = query_sinan_confirmed_etiology_counts(table, exprs, confirmed_where)
+    if etio_counts.empty:
+        st.info(
+            "Não há casos confirmados com grupo etiológico identificável (Viral/Bacteriana/Tuberculosa/Fúngica) "
+            "e punção lombar realizada nos filtros atuais."
+        )
+    else:
+        etio_counts_display = etio_counts[etio_counts["grupo_etiologico"].isin(SINAN_ETIOLOGY_GROUPS)]
+        total_considerado = int(etio_counts_display["n"].sum())
+        st.caption(
+            f"Casos confirmados com grupo etiológico nos 4 grupos comparados (Viral/Bacteriana/Tuberculosa/"
+            f"Fúngica): {format_int_br(total_considerado)}."
+        )
+        fig_counts = px.bar(
+            etio_counts_display,
+            x="grupo_etiologico",
+            y="n",
+            title="Casos confirmados por grupo etiológico (com LCR)",
+            labels={"grupo_etiologico": "Grupo etiológico", "n": "Casos"},
+            color="grupo_etiologico",
+            color_discrete_sequence=APP_COLOR_SEQUENCE,
+        )
+        render_plotly_chart(fig_counts)
+
+        param_labels = {"leuco": "Leucócitos", "prot": "Proteínas"}
+        for param, label in param_labels.items():
+            df_param = query_sinan_confirmed_param_vs_range(table, exprs, confirmed_where, param)
+            if df_param.empty:
+                st.info(f"Sem dados suficientes de {label.lower()} para comparar com as faixas esperadas.")
+                continue
+            df_param = add_text(df_param)
+            fig = px.bar(
+                df_param,
+                x="grupo_etiologico",
+                y="n",
+                color="posicao",
+                text="texto",
+                barmode="stack",
+                title=f"{label}: posição em relação à faixa esperada, por grupo etiológico confirmado",
+                labels={"grupo_etiologico": "Grupo etiológico", "n": "Casos", "posicao": "Posição"},
+                category_orders={"posicao": ["Abaixo da faixa típica", "Dentro da faixa típica", "Acima da faixa típica"]},
+                color_discrete_map={
+                    "Abaixo da faixa típica": "#1F77B4",
+                    "Dentro da faixa típica": "#2CA02C",
+                    "Acima da faixa típica": "#FF7F0E",
+                },
+            )
+            fig.update_traces(textposition="inside")
+            render_plotly_chart(fig)
+            copyable_dataframe(
+                df_param[["grupo_etiologico", "posicao", "n", "denominador", "pct"]],
+                width="stretch",
+                hide_index=True,
+            )
+            download_button(df_param, f"sinan_confirmados_{param}_vs_faixa.csv")
+
+        if neutro and linfo:
+            df_pred = query_sinan_confirmed_predominio_vs_expected(table, exprs, confirmed_where)
+            if not df_pred.empty:
+                df_pred = add_text(df_pred)
+                fig_pred = px.bar(
+                    df_pred,
+                    x="grupo_etiologico",
+                    y="n",
+                    color="situacao",
+                    text="texto",
+                    barmode="stack",
+                    title="Predomínio celular (neutrófilos x linfócitos) observado vs. esperado",
+                    labels={"grupo_etiologico": "Grupo etiológico", "n": "Casos", "situacao": "Situação"},
+                    category_orders={"situacao": ["Compatível com o esperado", "Discordante do esperado", "Empate/indefinido"]},
+                    color_discrete_map={
+                        "Compatível com o esperado": "#2CA02C",
+                        "Discordante do esperado": "#D62728",
+                        "Empate/indefinido": "#7F7F7F",
+                    },
+                )
+                fig_pred.update_traces(textposition="inside")
+                render_plotly_chart(fig_pred)
+                copyable_dataframe(
+                    df_pred[["grupo_etiologico", "situacao", "n", "denominador", "pct"]],
+                    width="stretch",
+                    hide_index=True,
+                )
+                download_button(df_pred, "sinan_confirmados_predominio_vs_esperado.csv")
+                st.caption(
+                    "Lembre-se: a própria AAFP relata predomínio linfocitário em mais de 10% das bacterianas "
+                    "(sobretudo no início do quadro) e predomínio neutrofílico nas primeiras 24–48h da viral. "
+                    "'Discordante' aqui não significa necessariamente caso mal classificado."
+                )
+        else:
+            st.info("LAB_NEUTRO e/ou LAB_LINFO não detectados; gráfico de predomínio celular não pode ser gerado.")
+
+        df_glico = query_sinan_confirmed_glucose_vs_expected(table, exprs, confirmed_where)
+        if not df_glico.empty:
+            df_glico = add_text(df_glico)
+            fig_glico = px.bar(
+                df_glico,
+                x="grupo_etiologico",
+                y="n",
+                color="posicao",
+                text="texto",
+                barmode="stack",
+                title="Glicose absoluta no LCR: reduzida x preservada, por grupo etiológico confirmado",
+                labels={"grupo_etiologico": "Grupo etiológico", "n": "Casos", "posicao": "Posição"},
+            )
+            fig_glico.update_traces(textposition="inside")
+            render_plotly_chart(fig_glico)
+            copyable_dataframe(
+                df_glico[["grupo_etiologico", "posicao", "n", "denominador", "pct"]],
+                width="stretch",
+                hide_index=True,
+            )
+            download_button(df_glico, "sinan_confirmados_glicose_vs_esperado.csv")
+            st.caption(
+                "Critério de corte (40 mg/dL) é aproximado pelas razões já descritas acima. Use com cautela, "
+                "sobretudo nos grupos tuberculosa/fúngica, em que a literatura-padrão (MSD/AAFP) só descreve "
+                "direção qualitativa ('reduzida'), sem ponto de corte numérico consensual."
+            )
+
+    # -------------------------------------------------------------------
+    # Bloco B — Casos descartados: risco de classificação equivocada
+    # -------------------------------------------------------------------
+    st.divider()
+    st.markdown("#### Casos descartados — quanto o perfil do LCR isoladamente sugeriria meningite")
+    st.caption(
+        "Considera casos com CLASSI_FIN = descartado e punção lombar realizada. Cada critério (pleocitose, "
+        "glicose reduzida, proteína elevada) é avaliado isoladamente — não combinado — para mostrar o efeito "
+        "de cada marcador isolado, como a pleocitose costuma ser o sinal mais sensível, porém pouco específico."
+    )
+
+    if not classi_code:
+        st.info("CLASSI_FIN não detectado; não é possível isolar os casos descartados.")
+        return
+
+    discarded_where = append_clause(base_where, f"{classi_code} = '2'")
+    if exprs.get("puncao_code"):
+        discarded_where = append_clause(discarded_where, f"{exprs['puncao_code']} = '1'")
+
+    n_discarded_lcr = count_rows(table, discarded_where)
+    if n_discarded_lcr == 0:
+        st.info("Não há casos descartados com punção lombar realizada nos filtros atuais.")
+        return
+    st.caption(f"Casos descartados com punção lombar realizada nos filtros atuais: {format_int_br(n_discarded_lcr)}.")
+
+    df_risk = query_sinan_discarded_meningitis_risk(table, exprs, discarded_where)
+    if df_risk.empty:
+        st.info("Sem dados numéricos suficientes (LAB_LEUCO/LAB_GLICO/LAB_PROT) para esta análise.")
+    else:
+        df_risk = df_risk.rename(columns={"n_sugestivo": "n", "pct_sugestivo": "pct"})
+        df_risk = add_text(df_risk)
+        fig_risk = px.bar(
+            df_risk,
+            x="criterio",
+            y="n",
+            text="texto",
+            title="Casos descartados cujo LCR seria sugestivo de meningite, por critério isolado",
+            labels={"criterio": "Critério avaliado isoladamente", "n": "Casos descartados", "pct": "%"},
+            hover_data={"texto": False, "pct": ":.1f", "denominador": True},
+        )
+        fig_risk.update_traces(textposition="outside", cliponaxis=False)
+        fig_risk.update_layout(xaxis_tickangle=-15)
+        render_plotly_chart(fig_risk)
+        copyable_dataframe(df_risk[["criterio", "n", "denominador", "pct"]], width="stretch", hide_index=True)
+        download_button(df_risk, "sinan_descartados_risco_isolado.csv")
+        st.caption(
+            "Pleocitose isolada (leucócitos ≥ 20 céls/mm³) é o critério mais sensível e menos específico: muitas "
+            "condições não infecciosas elevam levemente a celularidade do LCR. Glicose reduzida e proteína "
+            "elevada têm maior especificidade para infecção, mas também ocorrem em outras doenças do SNC."
+        )
 
 
 def render_loader(source: str) -> Optional[LoadedTable]:
@@ -5958,7 +6667,7 @@ def render_sinan_lcr_indicators(table: LoadedTable, exprs: Dict[str, Optional[st
                 render_interval_total(df, value_col="n")
                 copyable_dataframe(df, width="stretch", hide_index=True)
 
-    with st.expander("Como os parâmetros do LCR costumam se comportar por etiologia"):
+    with st.expander("📌 Tabela-resumo: como os parâmetros do LCR costumam se comportar por etiologia", expanded=True):
         render_quimio_interpretation()
 
     quimio_summary = query_sinan_quimio_summary(table, exprs, graph_where)
@@ -6251,8 +6960,6 @@ def render_sinan_overlap_tab(table: LoadedTable, base_where: str, exprs: Dict[st
     )
 
 def render_indicators_tab(table: LoadedTable, source: str, base_where: str, graph_where: str, exprs: Dict[str, Optional[str]]) -> None:
-    st.markdown("Os principais indicadores epidemiológicos usam os filtros-base. Os blocos laboratoriais movidos para esta área usam o recorte exploratório atual para preservar a leitura original dos gráficos.")
-
     def br_int(value: object) -> str:
         if pd.isna(value):
             return "—"
@@ -7204,7 +7911,9 @@ def render_demography_tab(table: LoadedTable, source: str, graph_where: str, exp
     sex = exprs.get("sex")
     race = exprs.get("race")
     age = exprs.get("age")
+    education = exprs.get("education")
     demography_case_base_where = base_where if (source == "SINAN" and base_where is not None) else graph_where
+    outcome_demography_where = base_where if base_where is not None else graph_where
     sinan_case_filter_options = ["Casos confirmados", "Casos descartados / sem classificação"]
 
     def sinan_case_filter_where(selection: str) -> str:
@@ -7254,242 +7963,275 @@ def render_demography_tab(table: LoadedTable, source: str, graph_where: str, exp
         filename = f"{source.lower()}_piramide_{suffix}.csv" if suffix else f"{source.lower()}_piramide.csv"
         download_button(pyr, filename)
 
-    if not age:
-        st.warning("Configure idade para gerar os gráficos etários. As categorias territoriais ainda podem ser exibidas abaixo.")
-    else:
-        age_selection = None
-        age_where = graph_where
+    def render_age_distribution_chart(age_where: str, selection: Optional[str] = None) -> None:
+        if not age:
+            return
+        age_df = query_age_dist(table, age, age_where)
+        if age_df.empty:
+            st.info("Sem dados suficientes de idade para gerar a distribuição por faixa etária com os filtros atuais.")
+            return
+        age_df = age_df.sort_values("faixa_ini").reset_index(drop=True)
+        age_df["faixa"] = age_df["faixa_ini"].astype(int).astype(str) + "–" + (age_df["faixa_ini"].astype(int) + 4).astype(str)
+        age_df["denominador"] = int(age_df["n"].sum())
+        age_df["pct"] = np.where(age_df["denominador"].gt(0), (age_df["n"] / age_df["denominador"] * 100).round(2), np.nan)
+        age_df = add_text(age_df)
+        faixa_order = age_df["faixa"].tolist()
+        fig_age = px.bar(
+            age_df,
+            x="faixa",
+            y="n",
+            text="texto",
+            title="Distribuição de casos conforme faixa etária" + sinan_case_filter_title(selection),
+            labels={"faixa": "Faixa etária", "n": "Registros", "pct": "%", "denominador": "Denominador"},
+            hover_data={"texto": False, "pct": ":.2f", "denominador": True},
+            category_orders={"faixa": faixa_order},
+        )
+        fig_age.update_traces(textposition="outside", cliponaxis=False)
+        render_plotly_chart(fig_age)
+        render_interval_total(age_df, value_col="n")
+        suffix = sinan_case_filter_suffix(selection)
+        filename = f"{source.lower()}_idade_{suffix}.csv" if suffix else f"{source.lower()}_idade.csv"
+        download_button(age_df, filename)
+
+    def render_sinan_education_chart() -> None:
+        if not education:
+            st.info("Para gerar o gráfico de escolaridade no SINAN, o campo CS_ESCOL_N/ESCOLARIDADE precisa existir e ser detectado automaticamente.")
+            return
+        if not exprs.get("classi_code"):
+            st.info("Para gerar a escolaridade por confirmados e descartados no SINAN, o campo CLASSI_FIN precisa existir e ser detectado automaticamente.")
+            return
+        schooling_where = base_where if base_where is not None else graph_where
+        edu_df = query_sinan_education_outcomes(
+            table,
+            education,
+            exprs["classi_code"],
+            schooling_where,
+        )
+        if edu_df.empty or pd.to_numeric(edu_df.get("denominador"), errors="coerce").fillna(0).max() <= 0:
+            st.info("Sem casos confirmados ou descartados para calcular a escolaridade com os filtros atuais.")
+            return
+        edu_df = add_text(edu_df)
+        grupo_order = ["Casos confirmados", "Casos descartados"]
+        categoria_order = education_category_labels("SINAN", education, include_missing=True)
+        edu_df = edu_df.sort_values(["ordem_escolaridade", "ordem_grupo", "grupo"]).reset_index(drop=True)
+        fig_edu = px.bar(
+            edu_df,
+            x="n",
+            y="escolaridade",
+            color="grupo",
+            orientation="h",
+            barmode="group",
+            text="texto",
+            title="Escolaridade — casos confirmados e descartados",
+            labels={
+                "escolaridade": "Escolaridade",
+                "n": "Registros",
+                "grupo": "Grupo",
+                "pct": "% no grupo",
+                "denominador": "Total no grupo",
+            },
+            hover_data={"texto": False, "pct": ":.2f", "denominador": True},
+            category_orders={"escolaridade": categoria_order, "grupo": grupo_order},
+        )
+        fig_edu.update_layout(yaxis={"categoryorder": "array", "categoryarray": categoria_order[::-1]})
+        st.caption("O gráfico exibe todas as categorias operacionais de escolaridade do SINAN; os percentuais usam o denominador do próprio grupo, separando casos confirmados e descartados.")
+        render_plotly_chart(fig_edu)
+        render_interval_total(edu_df, value_col="n", by_col="grupo")
+        edu_out = edu_df.drop(columns=["ordem_escolaridade", "ordem_grupo"], errors="ignore")
+        copyable_dataframe(edu_out, width="stretch", hide_index=True)
+        download_button(edu_out, "sinan_escolaridade_confirmados_descartados.csv")
+
+    def render_sim_education_chart() -> None:
+        if not education:
+            st.info("Para gerar o gráfico de escolaridade no SIM, o campo ESC2010/ESC precisa existir e ser detectado automaticamente.")
+            return
+        edu_df = query_education_distribution_all_categories(table, "SIM", education, graph_where)
+        if edu_df.empty or pd.to_numeric(edu_df.get("denominador"), errors="coerce").fillna(0).max() <= 0:
+            st.info("Sem dados de escolaridade no SIM com os filtros atuais.")
+            return
+        edu_df = add_text(edu_df)
+        categoria_order = education_category_labels("SIM", education, include_missing=True)
+        edu_df = edu_df.sort_values("ordem_categoria").reset_index(drop=True)
+        fig_edu = px.bar(
+            edu_df,
+            x="n",
+            y="categoria",
+            orientation="h",
+            text="texto",
+            title="Distribuição por escolaridade",
+            labels={"categoria": "Escolaridade", "n": "Óbitos", "pct": "% do total filtrado", "denominador": "Total filtrado"},
+            hover_data={"texto": False, "pct": ":.2f", "denominador": True},
+            category_orders={"categoria": categoria_order},
+            color_discrete_sequence=[PLOTLY_DEFAULT_BLUE],
+        )
+        disable_death_red(fig_edu)
+        preserve_trace_colors(fig_edu)
+        fig_edu.update_traces(marker_color=PLOTLY_DEFAULT_BLUE)
+        fig_edu.update_layout(yaxis={"categoryorder": "array", "categoryarray": categoria_order[::-1]})
+        st.caption("O gráfico exibe todas as categorias operacionais de escolaridade detectadas para o campo do SIM; os percentuais usam o total de registros filtrados como denominador.")
+        render_plotly_chart(fig_edu)
+        render_interval_total(edu_df, value_col="n")
+        edu_out = edu_df.drop(columns=["ordem_categoria"], errors="ignore")
+        copyable_dataframe(edu_out, width="stretch", hide_index=True)
+        download_button(edu_out, "sim_escolaridade.csv")
+
+    def render_simple_category_chart(label: str, expr: str, top_n: int = 25) -> None:
+        df = query_category(table, expr, graph_where, top_n=top_n)
+        if df.empty:
+            return
+        df["denominador"] = df["n"].sum()
+        df = add_text(df)
+        fig = px.bar(
+            df,
+            x="n",
+            y="categoria",
+            orientation="h",
+            text="texto",
+            title=label,
+            labels={"categoria": label, "n": "Registros", "pct": "%", "denominador": "Denominador"},
+            hover_data={"texto": False, "pct": ":.2f", "denominador": True},
+        )
+        fig.update_layout(yaxis={"categoryorder": "total ascending"})
+        render_plotly_chart(fig)
+        render_interval_total(df, value_col="n")
+        copyable_dataframe(df, width="stretch", hide_index=True)
+        download_button(df, f"{source.lower()}_{safe_filename(label)}.csv")
+
+    def render_municipality_charts() -> None:
+        mun_expr = exprs.get("mun_event_label") or exprs.get("mun_event")
+        if not mun_expr:
+            return
+        mun_label = "Município de ocorrência/atendimento/notificação"
+        top_municipios = 15
+        st.caption("Nos gráficos de município, são exibidos os 15 principais códigos IBGE; todas as demais categorias são somadas em 'Outros municípios'. Assim, percentual e denominador continuam representando 100% dos dados filtrados.")
+
         if source == "SINAN" and classi_code:
+            mun_specs: List[Tuple[str, str, str]] = [
+                ("Total", graph_where, "total"),
+                ("Confirmados", append_clause(demography_case_base_where, f"{classi_code} = '1'"), "confirmados"),
+                ("Descartados", append_clause(demography_case_base_where, f"{classi_code} = '2'"), "descartados"),
+                (
+                    "Sem classificação / ignorados",
+                    append_clause(demography_case_base_where, f"({classi_code} IS NULL OR {classi_code} NOT IN ('1', '2'))"),
+                    "sem_classificacao_ignorados",
+                ),
+            ]
+        else:
+            mun_specs = [("Total", graph_where, "total")]
+
+        for group_label, where_sql, suffix in mun_specs:
+            df = query_municipality_top(table, mun_expr, where_sql, top_n=top_municipios)
+            if df.empty:
+                continue
+            df = add_text(df)
+            title = f"{mun_label} — {group_label} — Top {top_municipios} + Outros municípios" if len(mun_specs) > 1 else f"{mun_label} — Top {top_municipios} + Outros municípios"
+            fig = px.bar(
+                df,
+                x="n",
+                y="categoria",
+                orientation="h",
+                text="texto",
+                title=title,
+                labels={"categoria": mun_label, "n": "Registros", "pct": "%", "denominador": "Denominador"},
+                hover_data={"texto": False, "pct": ":.2f", "denominador": True},
+            )
+            fig.update_layout(yaxis={"categoryorder": "array", "categoryarray": df["categoria"].tolist()[::-1]})
+            render_plotly_chart(fig)
+            render_interval_total(df, value_col="n")
+            filename = f"{source.lower()}_{safe_filename(mun_label)}_{suffix}_top{top_municipios}_outros.csv"
+            download_button(df, filename)
+
+    if not age and not sex and not race:
+        st.warning("Configure idade, sexo ou raça/cor para gerar os gráficos demográficos. As categorias territoriais ainda podem ser exibidas abaixo.")
+
+    if source == "SINAN" and classi_code:
+        # SINAN: distribuição por faixa etária permanece no topo, seguida por sexo + pirâmide
+        # etária (logo abaixo do gráfico de sexo), raça/cor, escolaridade e, por último, município.
+        if age:
             age_selection = st.selectbox(
                 "Grupo de casos para a distribuição por faixa etária",
                 sinan_case_filter_options,
                 key="sinan_age_distribution_case_filter",
             )
-            age_where = sinan_case_filter_where(age_selection)
-        age_df = query_age_dist(table, age, age_where)
-        if not age_df.empty:
-            age_df = age_df.sort_values("faixa_ini").reset_index(drop=True)
-            age_df["faixa"] = age_df["faixa_ini"].astype(int).astype(str) + "–" + (age_df["faixa_ini"].astype(int) + 4).astype(str)
-            age_df["denominador"] = int(age_df["n"].sum())
-            age_df["pct"] = np.where(age_df["denominador"].gt(0), (age_df["n"] / age_df["denominador"] * 100).round(2), np.nan)
-            age_df = add_text(age_df)
-            faixa_order = age_df["faixa"].tolist()
-            fig_age = px.bar(
-                age_df,
-                x="faixa",
-                y="n",
-                text="texto",
-                title="Distribuição de casos conforme faixa etária" + sinan_case_filter_title(age_selection),
-                labels={"faixa": "Faixa etária", "n": "Registros", "pct": "%", "denominador": "Denominador"},
-                hover_data={"texto": False, "pct": ":.2f", "denominador": True},
-                category_orders={"faixa": faixa_order},
-            )
-            fig_age.update_traces(textposition="outside", cliponaxis=False)
-            render_plotly_chart(fig_age)
-            render_interval_total(age_df, value_col="n")
-            suffix = sinan_case_filter_suffix(age_selection)
-            filename = f"{source.lower()}_idade_{suffix}.csv" if suffix else f"{source.lower()}_idade.csv"
-            download_button(age_df, filename)
-
-        # Para o SINAN com CLASSI_FIN, a pirâmide é renderizada logo abaixo do gráfico de sexo,
-        # conforme solicitado. Nas demais bases, mantém-se a posição original junto dos gráficos etários.
-        if sex and not (source == "SINAN" and classi_code):
-            render_age_pyramid_chart(graph_where, None)
-
-
-    education = exprs.get("education")
-    if source == "SINAN":
-        st.markdown("### Escolaridade")
-        if not education:
-            st.info("Para gerar o gráfico de escolaridade no SINAN, o campo CS_ESCOL_N/ESCOLARIDADE precisa existir e ser detectado automaticamente.")
-        elif not exprs.get("classi_code"):
-            st.info("Para gerar a escolaridade por confirmados e descartados no SINAN, o campo CLASSI_FIN precisa existir e ser detectado automaticamente.")
+            render_age_distribution_chart(sinan_case_filter_where(age_selection), age_selection)
         else:
-            schooling_where = base_where if base_where is not None else graph_where
-            edu_df = query_sinan_education_outcomes(
-                table,
-                education,
-                exprs["classi_code"],
-                schooling_where,
-            )
-            if edu_df.empty or pd.to_numeric(edu_df.get("denominador"), errors="coerce").fillna(0).max() <= 0:
-                st.info("Sem casos confirmados ou descartados para calcular a escolaridade com os filtros atuais.")
-            else:
-                edu_df = add_text(edu_df)
-                grupo_order = ["Casos confirmados", "Casos descartados"]
-                categoria_order = education_category_labels("SINAN", education, include_missing=True)
-                edu_df = edu_df.sort_values(["ordem_escolaridade", "ordem_grupo", "grupo"]).reset_index(drop=True)
-                fig_edu = px.bar(
-                    edu_df,
+            st.warning("Configure idade para gerar os gráficos etários. As categorias territoriais ainda podem ser exibidas abaixo.")
+
+        if sex or race:
+            outcome_specs = []
+            if sex:
+                outcome_specs.append(("Sexo", sex, "sexo"))
+            if race:
+                outcome_specs.append(("Raça/cor", race, "raca_cor"))
+            for label, expr, cat_col in outcome_specs:
+                out_df = query_sinan_category_outcomes(
+                    table,
+                    expr,
+                    classi_code,
+                    outcome_demography_where,
+                    category_col=cat_col,
+                )
+                if out_df.empty or pd.to_numeric(out_df.get("denominador"), errors="coerce").fillna(0).max() <= 0:
+                    st.info(f"Sem casos confirmados, descartados ou sem classificação para calcular {label.lower()} com os filtros atuais.")
+                    continue
+                out_df = add_text(out_df)
+                categoria_order = out_df.sort_values("ordem_categoria")[cat_col].drop_duplicates().tolist()
+                out_df = out_df.sort_values(["ordem_categoria", "ordem_grupo"]).reset_index(drop=True)
+                fig_outcome = px.bar(
+                    out_df,
                     x="n",
-                    y="escolaridade",
+                    y=cat_col,
                     color="grupo",
                     orientation="h",
                     barmode="group",
                     text="texto",
-                    title="Escolaridade — casos confirmados e descartados",
+                    title=f"{label} — confirmados, descartados e sem classificação/ignorados",
                     labels={
-                        "escolaridade": "Escolaridade",
+                        cat_col: label,
                         "n": "Registros",
                         "grupo": "Grupo",
                         "pct": "% no grupo",
                         "denominador": "Total no grupo",
                     },
                     hover_data={"texto": False, "pct": ":.2f", "denominador": True},
-                    category_orders={"escolaridade": categoria_order, "grupo": grupo_order},
+                    category_orders={cat_col: categoria_order, "grupo": SINAN_OUTCOME_GROUP_ORDER},
                 )
-                fig_edu.update_layout(yaxis={"categoryorder": "array", "categoryarray": categoria_order[::-1]})
-                st.caption("O gráfico exibe todas as categorias operacionais de escolaridade do SINAN; os percentuais usam o denominador do próprio grupo, separando casos confirmados e descartados.")
-                render_plotly_chart(fig_edu)
-                render_interval_total(edu_df, value_col="n", by_col="grupo")
-                edu_out = edu_df.drop(columns=["ordem_escolaridade", "ordem_grupo"], errors="ignore")
-                copyable_dataframe(edu_out, width="stretch", hide_index=True)
-                download_button(edu_out, "sinan_escolaridade_confirmados_descartados.csv")
-    elif source == "SIM":
-        st.markdown("### Escolaridade")
-        if not education:
-            st.info("Para gerar o gráfico de escolaridade no SIM, o campo ESC2010/ESC precisa existir e ser detectado automaticamente.")
-        else:
-            edu_df = query_education_distribution_all_categories(table, "SIM", education, graph_where)
-            if edu_df.empty or pd.to_numeric(edu_df.get("denominador"), errors="coerce").fillna(0).max() <= 0:
-                st.info("Sem dados de escolaridade no SIM com os filtros atuais.")
-            else:
-                edu_df = add_text(edu_df)
-                categoria_order = education_category_labels("SIM", education, include_missing=True)
-                edu_df = edu_df.sort_values("ordem_categoria").reset_index(drop=True)
-                fig_edu = px.bar(
-                    edu_df,
-                    x="n",
-                    y="categoria",
-                    orientation="h",
-                    text="texto",
-                    title="Distribuição por escolaridade",
-                    labels={"categoria": "Escolaridade", "n": "Óbitos", "pct": "% do total filtrado", "denominador": "Total filtrado"},
-                    hover_data={"texto": False, "pct": ":.2f", "denominador": True},
-                    category_orders={"categoria": categoria_order},
-                    color_discrete_sequence=[PLOTLY_DEFAULT_BLUE],
-                )
-                disable_death_red(fig_edu)
-                preserve_trace_colors(fig_edu)
-                fig_edu.update_traces(marker_color=PLOTLY_DEFAULT_BLUE)
-                fig_edu.update_layout(yaxis={"categoryorder": "array", "categoryarray": categoria_order[::-1]})
-                st.caption("O gráfico exibe todas as categorias operacionais de escolaridade detectadas para o campo do SIM; os percentuais usam o total de registros filtrados como denominador.")
-                render_plotly_chart(fig_edu)
-                render_interval_total(edu_df, value_col="n")
-                edu_out = edu_df.drop(columns=["ordem_categoria"], errors="ignore")
-                copyable_dataframe(edu_out, width="stretch", hide_index=True)
-                download_button(edu_out, "sim_escolaridade.csv")
+                fig_outcome.update_layout(yaxis={"categoryorder": "array", "categoryarray": categoria_order[::-1]})
+                render_plotly_chart(fig_outcome)
+                render_interval_total(out_df, value_col="n", by_col="grupo")
+                out_export = out_df.drop(columns=["ordem_categoria", "ordem_grupo"], errors="ignore")
+                copyable_dataframe(out_export, width="stretch", hide_index=True)
+                download_button(out_export, f"sinan_{safe_filename(label)}_confirmados_descartados_sem_classificacao.csv")
 
-    sex = exprs.get("sex")
-    race = exprs.get("race")
-    classi_code = exprs.get("classi_code") if source == "SINAN" else None
-    outcome_demography_where = base_where if base_where is not None else graph_where
+                if label == "Sexo" and age and sex:
+                    pyramid_selection = st.selectbox(
+                        "Grupo de casos para a pirâmide etária",
+                        sinan_case_filter_options,
+                        key="sinan_age_pyramid_case_filter",
+                    )
+                    render_age_pyramid_chart(sinan_case_filter_where(pyramid_selection), pyramid_selection)
 
-    if classi_code and (sex or race):
-        st.markdown("### Sexo e raça/cor — confirmados, descartados e sem classificação / ignorados")
-        st.caption(
-            "'Sem classificação / ignorados' reúne CLASSI_FIN ausente ou com qualquer valor diferente de "
-            "confirmado (1) e descartado (2) — a mesma variável usada nos demais indicadores do SINAN para esse grupo."
-        )
-        outcome_specs = []
-        if sex:
-            outcome_specs.append(("Sexo", sex, "sexo"))
-        if race:
-            outcome_specs.append(("Raça/cor", race, "raca_cor"))
-        for label, expr, cat_col in outcome_specs:
-            out_df = query_sinan_category_outcomes(
-                table,
-                expr,
-                classi_code,
-                outcome_demography_where,
-                category_col=cat_col,
-            )
-            if out_df.empty or pd.to_numeric(out_df.get("denominador"), errors="coerce").fillna(0).max() <= 0:
-                st.info(f"Sem casos confirmados, descartados ou sem classificação para calcular {label.lower()} com os filtros atuais.")
-                continue
-            out_df = add_text(out_df)
-            categoria_order = out_df.sort_values("ordem_categoria")[cat_col].drop_duplicates().tolist()
-            out_df = out_df.sort_values(["ordem_categoria", "ordem_grupo"]).reset_index(drop=True)
-            fig_outcome = px.bar(
-                out_df,
-                x="n",
-                y=cat_col,
-                color="grupo",
-                orientation="h",
-                barmode="group",
-                text="texto",
-                title=f"{label} — confirmados, descartados e sem classificação/ignorados",
-                labels={
-                    cat_col: label,
-                    "n": "Registros",
-                    "grupo": "Grupo",
-                    "pct": "% no grupo",
-                    "denominador": "Total no grupo",
-                },
-                hover_data={"texto": False, "pct": ":.2f", "denominador": True},
-                category_orders={cat_col: categoria_order, "grupo": SINAN_OUTCOME_GROUP_ORDER},
-            )
-            fig_outcome.update_layout(yaxis={"categoryorder": "array", "categoryarray": categoria_order[::-1]})
-            render_plotly_chart(fig_outcome)
-            render_interval_total(out_df, value_col="n", by_col="grupo")
-            out_export = out_df.drop(columns=["ordem_categoria", "ordem_grupo"], errors="ignore")
-            copyable_dataframe(out_export, width="stretch", hide_index=True)
-            download_button(out_export, f"sinan_{safe_filename(label)}_confirmados_descartados_sem_classificacao.csv")
+        render_sinan_education_chart()
 
-            if label == "Sexo" and age and sex:
-                pyramid_selection = st.selectbox(
-                    "Grupo de casos para a pirâmide etária",
-                    sinan_case_filter_options,
-                    key="sinan_age_pyramid_case_filter",
-                )
-                render_age_pyramid_chart(sinan_case_filter_where(pyramid_selection), pyramid_selection)
+        render_municipality_charts()
 
-    cols = []
-    if not classi_code:
-        if sex:
-            cols.append(("Sexo", sex, False, 25))
-        if race:
-            cols.append(("Raça/cor", race, False, 25))
-    # O gráfico de município de residência foi removido conforme revisão metodológica.
-    if exprs.get("mun_event_label") or exprs.get("mun_event"):
-        cols.append(("Município de ocorrência/atendimento/notificação", exprs.get("mun_event_label") or exprs["mun_event"], True, 15))
-    if cols:
+    else:
+        # SIM/CIHA: sexo, depois pirâmide etária por sexo, depois raça/cor, depois distribuição
+        # por faixa etária, depois escolaridade (quando disponível) e, por último, município.
         st.markdown("### Categorias demográficas e territoriais")
-        if any(is_mun for _, _, is_mun, _ in cols):
-            top_municipios = 15
-            st.caption("Nos gráficos de município, são exibidos os 15 principais códigos IBGE; todas as demais categorias são somadas em 'Outros municípios'. Assim, percentual e denominador continuam representando 100% dos dados filtrados.")
-        else:
-            top_municipios = 15
-        for label, expr, is_mun, top_n in cols:
-            if is_mun:
-                df = query_municipality_top(table, expr, graph_where, top_n=top_municipios)
-                filename = f"{source.lower()}_{safe_filename(label)}_top{top_municipios}_outros.csv"
-            else:
-                df = query_category(table, expr, graph_where, top_n=top_n)
-                if not df.empty:
-                    df["denominador"] = df["n"].sum()
-                filename = f"{source.lower()}_{safe_filename(label)}.csv"
-            if not df.empty:
-                df = add_text(df)
-                title = label if not is_mun else f"{label} — Top {top_municipios} + Outros municípios"
-                fig = px.bar(
-                    df,
-                    x="n",
-                    y="categoria",
-                    orientation="h",
-                    text="texto",
-                    title=title,
-                    labels={"categoria": label, "n": "Registros", "pct": "%", "denominador": "Denominador"},
-                    hover_data={"texto": False, "pct": ":.2f", "denominador": True},
-                )
-                if is_mun:
-                    fig.update_layout(yaxis={"categoryorder": "array", "categoryarray": df["categoria"].tolist()[::-1]})
-                else:
-                    fig.update_layout(yaxis={"categoryorder": "total ascending"})
-                render_plotly_chart(fig)
-                render_interval_total(df, value_col="n")
-                copyable_dataframe(df, width="stretch", hide_index=True)
-                download_button(df, filename)
+        if sex:
+            render_simple_category_chart("Sexo", sex, top_n=25)
+            render_age_pyramid_chart(graph_where, None)
+        if race:
+            render_simple_category_chart("Raça/cor", race, top_n=25)
+        if age:
+            render_age_distribution_chart(graph_where, None)
+
+        if source == "SIM":
+            st.markdown("### Escolaridade")
+            render_sim_education_chart()
+
+        render_municipality_charts()
 
 
 def render_quality_tab(table: LoadedTable, source: str, base_where: str, exprs: Dict[str, Optional[str]]) -> None:
@@ -7696,6 +8438,7 @@ def render_source(source: str) -> Optional[Dict[str, object]]:
     ]
     if source == "SINAN":
         analysis_sections.append("Sobreposição NU_NOTIFIC / NM_PACIENT")
+        analysis_sections.append("Quimiocitologia e classificação etiológica")
     analysis_sections.extend([
         "Campos importantes não preenchidos",
         "Prévia",
@@ -7722,6 +8465,8 @@ def render_source(source: str) -> Optional[Dict[str, object]]:
         render_demography_tab(table, source, graph_where, exprs, base_where=base_where)
     elif selected_section == "Sobreposição NU_NOTIFIC / NM_PACIENT" and source == "SINAN":
         render_sinan_overlap_tab(table, base_where, exprs)
+    elif selected_section == "Quimiocitologia e classificação etiológica" and source == "SINAN":
+        render_quimio_classification_tab(table, exprs, base_where)
     elif selected_section == "Campos importantes não preenchidos":
         render_quality_tab(table, source, base_where, exprs)
     elif selected_section == "Prévia":
